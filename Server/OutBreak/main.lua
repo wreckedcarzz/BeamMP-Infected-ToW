@@ -402,7 +402,7 @@ local function gameStarting()
 		end
 	end
 
-	MP.SendChatMessage(-1,"Infection game started; you have "..varStartingSeconds.." seconds before the zombie is revealed! Survive for "..(varDays or "0").." days, "..(varHours or "0").." hours, "..(varMinutes or "0").." minutes, and "..(varSeconds or "0").." seconds.")
+	MP.SendChatMessage(-1,"Infection game started; you have "..varStartingSeconds.." seconds before the zombie is revealed! Survive for "..(varDays or "0").."days, "..(varHours or "0").." hours, "..(varMinutes or "0").." minutes, and "..(varSeconds or "0").."seconds.")
 end
 
 local function gameRunningLoop() --code in this loop runs every 1s during an active match
@@ -516,13 +516,9 @@ function timer() -- I think this runs every 1s
 	end
 end
 
--- duplicate?
--- MP.RegisterEvent("onContact", "onContact")
+MP.RegisterEvent("onContact", "onContact")
+MP.RegisterEvent("second", "timer")
 
--- this isn't even used?
--- MP.RegisterEvent("second", "timer")
-
--- or this maybe? unknown
 MP.CancelEventTimer("counter")
 MP.CancelEventTimer("second")
 MP.CreateEventTimer("second",1000)
