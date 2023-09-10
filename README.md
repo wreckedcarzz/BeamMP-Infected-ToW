@@ -1,10 +1,10 @@
 # BeamMP-Infected-ToW
 
-This is a fork of the original BeamMP-Outbreak project. This has quite a few quality-of-life improvements, ranging from spelling corrections to variable naming imprvements, to enabling code that was unused in the original release. It also makes use of the chat box to inform players about critical things like rules during gameplay.
+This is a fork of the original BeamMP-Outbreak project. This has quite a few quality-of-life improvements, ranging from spelling corrections to variable naming improvements, to enabling code that was unused in the original release. It also makes use of the chat box to inform players about critical things like rules during gameplay.
 
 Like the original, this is not complete. I have decided to release my version to help others who are interested in seeing small but meaningful changes.
 
-This is my first attempt at poking around in Lua, and Github. The TODO list is what I may be working on to further the project; no promises. A solid two weeks of coding, testing, and troubleshooting is taking its toll on me, but currently it all works.
+This is my first attempt at poking around in Lua, and Github. The TODO list (inside /server/outbreak/main) is what I may be working on to further the project; no promises. A solid two weeks of coding, testing, and troubleshooting is taking its toll on me, but currently it all works.
 
 Original README below.
 
