@@ -497,7 +497,7 @@ end
 function timer() -- I think this runs every 1s
 	if gameState.gameRunning then
 		gameRunningLoop()
-	elseif varAutoStartEnabled and MP.GetPlayerCount() > 2 then --was -1
+	elseif varAutoStartEnabled and MP.GetPlayerCount() > 1 then --was -1
 		--print(varAutoStartTimer)
 		if varAutoStartTimer < varAutoStartDelay and string.find(varAutoStartTimer, 0) then
 			MP.SendChatMessage(-1,"Automatic zombie gamemode enabled; "..varAutoStartDelay - varAutoStartTimer.." seconds remaining.")
