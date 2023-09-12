@@ -17,6 +17,7 @@ local varNotifyRepairRespawn = "ALL players must come to a COMPLETE STOP before 
 local varRoundLength = 10*60 -- lenght of the game, in seconds (minutes*seconds, so default is 10 minutes)
 local varStartingSeconds = 10 -- the number of seconds before the initial player is revealed as infected
 local varWakeWord = "infected" -- customizable word for text commands ( /varWakeWord <action> ) CRITICAL NOTE: if you change this to anything but "infected" or "outbreak", you need to update the 3 instances of "local value = tonumber(string.sub(message,<THIS-NUMBER>,10000))" where THIS NUMBER is the total number of characters, including the /, until and including the % for the settings menu to be functional
+local varTeamWakeWord = "survival" -- same as above but for team matches
 ---end settings area---
 
 
@@ -55,6 +56,7 @@ TODO if event in progress, remove newly spawned car
 local varAutoStartTimer = 0
 local varExcludedPlayers = {} --TODO make these do something
 local varFloor = math.floor
+varGameType = "infected"
 local varIncludedPlayers = {} --TODO make these do something
 local varMod = math.fmod
 local varNoticeSwitch = true
@@ -287,10 +289,14 @@ local function infectRandomPlayer()
 		--print(playername,varWeightingArray[playername].endNumber - varWeightingArray[playername].startNumber,varWeightingArray[playername].startNumber , varWeightingArray[playername].endNumber,varWeightingArray[playername].infections,varWeightingArray[playername].games,gameState.playerCount)
 	end
 
-	local varRandomID = math.random(1, math.floor(varWeightRatio))
+	local varRandomID1 = math.random(1, math.floor(varWeightRatio))
+	local varRandomID2 = math.random(1, math.floor(varWeightRatio))
+	local varRandomID3 = math.random(1, math.floor(varWeightRatio))
+	local varRandomID4 = math.random(1, math.floor(varWeightRatio))
+	local varRandomID5 = math.random(1, math.floor(varWeightRatio))
 	
 	for playername,player in pairs(varPlayers) do
-		if varRandomID >= varWeightingArray[playername].startNumber and varRandomID <= varWeightingArray[playername].endNumber then --if count == varRandomID then
+		if varRandomID1 >= varWeightingArray[playername].startNumber and varRandomID1 <= varWeightingArray[playername].endNumber then --if count == varRandomID1 then
 			if not gameState.oneInfected then
 				gameState.players[playername].remoteContact = true
 				gameState.players[playername].localContact = true
@@ -316,7 +322,7 @@ local function infectRandomPlayer()
 	end
 
 	MP.TriggerClientEventJson(-1, "recieveGameState", gameState)
-	--print(varRandomID,varWeightingArray)
+	--print(varRandomID1,varWeightingArray)
 end
 
 local function gameStarting()
@@ -402,7 +408,7 @@ local function gameStarting()
 		end
 	end
 
-	MP.SendChatMessage(-1,"Infection game started; you have "..varStartingSeconds.." seconds before the zombie is revealed! Survive for "..(varDays or "0").." days, "..(varHours or "0").." hours, "..(varMinutes or "0").." minutes, and "..(varSeconds or "0").." seconds.")
+	MP.SendChatMessage(-1,"Infection game started; you have "..varStartingSeconds.." seconds before the zombie is revealed! Survive for "..(varDays or "0").."days, "..(varHours or "0").." hours, "..(varMinutes or "0").." minutes, and "..(varSeconds or "0").."seconds.")
 end
 
 local function gameRunningLoop() --code in this loop runs every 1s during an active match
@@ -497,7 +503,7 @@ end
 function timer() -- I think this runs every 1s
 	if gameState.gameRunning then
 		gameRunningLoop()
-	elseif varAutoStartEnabled and MP.GetPlayerCount() > 2 then --was -1
+	elseif varAutoStartEnabled and MP.GetPlayerCount() > 1 then --was -1
 		--print(varAutoStartTimer)
 		if varAutoStartTimer < varAutoStartDelay and string.find(varAutoStartTimer, 0) then
 			MP.SendChatMessage(-1,"Automatic zombie gamemode enabled; "..varAutoStartDelay - varAutoStartTimer.." seconds remaining.")
@@ -516,13 +522,9 @@ function timer() -- I think this runs every 1s
 	end
 end
 
--- duplicate?
--- MP.RegisterEvent("onContact", "onContact")
+MP.RegisterEvent("onContact", "onContact")
+MP.RegisterEvent("second", "timer")
 
--- this isn't even used?
--- MP.RegisterEvent("second", "timer")
-
--- or this maybe? unknown
 MP.CancelEventTimer("counter")
 MP.CancelEventTimer("second")
 MP.CreateEventTimer("second",1000)
@@ -545,7 +547,7 @@ function outbreakChatMessageHandler(sender_id, sender_name, message)
 		MP.SendChatMessage(sender_id,""..varTempPlayerName.." has been removed from the game.")
 		return 1
 		
-	elseif message == "/"..varWakeWord.." start" then -- or string.find(message,"/"..varWakeWord.." start %d+") then
+	elseif message == "/"..varWakeWord.." start" or message == "/"..varTeamWakeWord.. " start" then -- or string.find(message,"/"..varWakeWord.." start %d+") then
 		varAutoStartTimer = 0
 		varAutoStartEnabled = false
 		local number = tonumber(string.sub(message,16,10000))
@@ -558,7 +560,7 @@ function outbreakChatMessageHandler(sender_id, sender_name, message)
 
 		return 1
 		
-	elseif message == "/"..varWakeWord.." stop" then
+	elseif message == "/"..varWakeWord.." stop" or message == "/"..varTeamWakeWord.. " stop" then
 		if varAutoStartEnabled == true then
 			varAutoStartTimer = 0
 			varAutoStartEnabled = false
