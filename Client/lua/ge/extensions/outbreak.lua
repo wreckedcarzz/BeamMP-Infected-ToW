@@ -127,7 +127,7 @@ local function updateGameState(data)
 	end
 
 	if varTime and varTime < 0 then
-		varTxt = "Game starts in "..math.abs(varTime).." seconds"
+		varTxt = "Game starts in "..math.abs(varTime).." seconds..."
 	elseif varGameState.gameRunning and not varGameState.gameEnding and varTime or varGameState.endtime and (varGameState.endtime - varTime) > 9 then
 		
 		-- disabled in original code
@@ -135,7 +135,7 @@ local function updateGameState(data)
 		--local nonInfectedPlayers = varGameState.nonInfectedPlayers
 
 		local varTimeLeft = secondsToDaysHoursMinutesSeconds(varGameState.varRoundLength - varTime)
-		varTxt = "Infected "..varGameState.InfectedPlayers.."/"..varGameState.playerCount..", Time Left "..varTimeLeft..""
+		varTxt = "Infected: "..varGameState.InfectedPlayers.."/"..varGameState.playerCount..", Time Left "..varTimeLeft..""
 	elseif varTime and varGameState.endtime and (varGameState.endtime - varTime) < 7 then
 
 		-- disabled in original code
@@ -143,7 +143,7 @@ local function updateGameState(data)
 		--local nonInfectedPlayers = varGameState.nonInfectedPlayers
 
 		local varTimeLeft = varGameState.endtime - varTime
-		varTxt = "Infected "..varGameState.InfectedPlayers.."/"..varGameState.playerCount..", Colors reset in "..math.abs(varTimeLeft-1).." seconds"
+		varTxt = "Infected: "..varGameState.InfectedPlayers.."/"..varGameState.playerCount..", Colors reset in "..math.abs(varTimeLeft-1).." seconds..."
 
 	end
 	if varTxt ~= "" then
@@ -163,8 +163,8 @@ local function sendContact(vehID,localVehID)
 	if not MPVehicleGE or MPCoreNetwork and not MPCoreNetwork.isMPSession() then return end
 	local varLocalVehPlayerName = MPVehicleGE.getNicknameMap()[localVehID]
 	local varVehPlayerName = MPVehicleGE.getNicknameMap()[vehID]
-	if varGameState.players[varVehPlayerName] and varGameState.players[varLocalVehPlayerName] then
-		if varGameState.players[varVehPlayerName].infected ~= varGameState.players[varLocalVehPlayerName].infected then
+	if varGameState.players[varVehPlayerName] and varGameState.players[varLocalVehPlayerName] then -- if both clients agree that they are both in contact with each other
+		if varGameState.players[varVehPlayerName].infected ~= varGameState.players[varLocalVehPlayerName].infected then -- if the remote player is not equal to the local player
     		local varServerVehID = MPVehicleGE.getServerVehicleID(vehID)
 			local varRemotePlayerID, vehicleID = string.match(varServerVehID, "(%d+)-(%d+)")
 			if TriggerServerEvent then TriggerServerEvent("onContact", varRemotePlayerID) end
@@ -194,12 +194,35 @@ local function onVehicleSwitched(oldID,ID)
 end
 
 local function nametags(curentOwnerName,player,vehicle)
+	-- show red Survivor tag to Infected players in Infected mode
 	if varGameState.players[curentOwnerName] and varGameState.players[curentOwnerName].infected and not player.infected and curentOwnerName ~= vehicle.ownerName then
 		local varVeh = be:getObjectByID(vehicle.gameVehicleID)
 		if varVeh then
 			local varVehPos = varVeh:getPosition()
 			local varPositionOffset = vec3(0,0,2)
-			debugDrawer:drawTextAdvanced(varVehPos+varPositionOffset, String(" Survivor "), ColorF(1,1,1,1), true, false, ColorI(200,50,50,255))
+			debugDrawer:drawTextAdvanced(varVehPos+varPositionOffset, String(" Survivor - enemy "), ColorF(1,1,1,1), true, false, ColorI(200,50,50,255))
+		end
+	end
+	
+	-- show purple Survivor tag to Survivors during Survival mode
+	if varGameState.players[curentOwnerName] and not varGameState.players[curentOwnerName].infected and not player.infected and curentOwnerName ~= vehicle.ownerName then
+		local varVeh = be:getObjectByID(vehicle.gameVehicleID)
+		if varVeh then
+			local varVehPos = varVeh:getPosition()
+			local varPositionOffset = vec3(0,0,2)
+			debugDrawer:drawTextAdvanced(varVehPos+varPositionOffset, String(" Survivor - teammate "), ColorF(1,1,1,1), true, false, ColorI(200,50,200,255))
+		end
+	end
+	
+	-- show yellow Infected tag to Survivors -- and Zombies during Survival mode
+	if varGameState.players[curentOwnerName] and not varGameState.players[curentOwnerName].infected and not player.infected and curentOwnerName ~= vehicle.ownerName then
+		local varVeh = be:getObjectByID(vehicle.gameVehicleID)
+		if varVeh then
+			local varVehPos = varVeh:getPosition()
+			local varPositionOffset = vec3(0,0,2)
+			debugDrawer:drawTextAdvanced(varVehPos+varPositionOffset, String(" Infected - teammate "), ColorF(1,1,1,1), true, false, ColorI(200,50,50,255))
+			
+			
 		end
 	end
 end
@@ -359,6 +382,6 @@ M.onVehicleSwitched = onVehicleSwitched
 M.resetInfected = resetInfected
 M.onExtensionUnloaded = onExtensionUnloaded
 M.onResetGameplay = onResetGameplay
---M.gamestate = varGameState
+--M.gamestate = gamestate
 
 return M
