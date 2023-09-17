@@ -1,37 +1,47 @@
---slight adjustments to work with the server-side changes, plus variable name changes for more code readability, by wreckedcarzz (https://wreckedcarzz.com)
+--lightly adjustments to work with the server-side changes, by wreckedcarzz (https://wreckedcarzz.com)
+
+
+
+--[[
+DONE reverted, redid changes to original
+DONE added nametag colors for teams
+TEST cleanup of variables, renaming
+]]
+
+
 
 local M = {}
-
-local varFloor = math.floor
-local varMod = math.fmod
-local varGameState = {players = {}, settings = {}}
+--local floor = math.floor
+--local mod = math.fmod
 local varDefaultGreenFadeDistance = 20
-local varDistancecolor = -1
+local varDistanceColor = -1
+local varGameState = {players = {}, settings = {}}
 
 
---[[extensions.unload("outbreak") extensions.load("outbreak")
 
-local actionTemplate = core_input_actionFilter.getActionTemplates()
+--extensions.unload("outbreak")
+--extensions.load("outbreak")
 
-core_input_actionFilter.setGroup('competitive', actionTemplate.vehicleTeleporting)
+--local actionTemplate = core_input_actionFilter.getActionTemplates()
+
+--core_input_actionFilter.setGroup('competitive', actionTemplate.vehicleTeleporting)
 
 local blockedActions = core_input_actionFilter.createActionTemplate({"vehicleTeleporting", "vehicleMenues", "physicsControls", "aiControls", "vehicleSwitching", "funStuff"})
 
-dump(blockedActions,"teste")]]
-
-local function secondsToDaysHoursMinutesSeconds(totalSeconds) --modified code from https://stackoverflow.com/questions/45364628/lua-4-script-to-convert-seconds-elapsed-to-days-hours-minutes-seconds
-    local varMinutes  = varFloor(varMod(total_seconds, 3600) / 60)
-    local varSeconds  = varFloor(varMod(total_seconds, 60))
-    --if (varMinutes < 10) then
-    --    varMinutes = "0" .. varMinutes
-    --end
-    if (varSeconds < 10) and varMinutes > 0 then
-        varSeconds = "0" .. varSeconds
+local function secondsToDaysHoursMinutesSeconds(total_seconds) --modified code from https://stackoverflow.com/questions/45364628/lua-4-script-to-convert-seconds-elapsed-to-days-hours-minutes-seconds
+    local time_minutes  = math.floor(math.fmod(total_seconds, 3600) / 60)
+    local time_seconds  = math.floor(math.fmod(total_seconds, 60))
+    --[[if (time_minutes < 10) then
+        time_minutes = "0" .. time_minutes
     end
-	if varMinutes > 0 then
-    	return varMinutes .. ":" .. varSeconds
+	]]
+    if (time_seconds < 10) and time_minutes > 0 then
+        time_seconds = "0" .. time_seconds
+    end
+	if time_minutes > 0 then
+    	return time_minutes .. ":" .. time_seconds
 	else
-    	return varSeconds
+    	return time_seconds
 	end
 end
 
@@ -41,17 +51,17 @@ end
 
 local function resetInfected(data)
 	for k,serverVehicle in pairs(MPVehicleGE.getVehicles()) do
-		local varID = serverVehicle.gameVehicleID
-		local varVehicle = be:getObjectByID(varID)
-		if varVehicle then
+		local ID = serverVehicle.gameVehicleID
+		local vehicle = be:getObjectByID(ID)
+		if vehicle then
 			if serverVehicle.originalColor then
-				varVehicle.color = serverVehicle.originalColor
+				vehicle.color = serverVehicle.originalColor
 			end
 			if serverVehicle.originalcolorPalette0 then
-				varVehicle.colorPalette0 = serverVehicle.originalcolorPalette0
+				vehicle.colorPalette0 = serverVehicle.originalcolorPalette0
 			end
 			if serverVehicle.originalcolorPalette1 then
-				varVehicle.colorPalette1 = serverVehicle.originalcolorPalette1
+				vehicle.colorPalette1 = serverVehicle.originalcolorPalette1
 			end
 		end
 	end
@@ -67,20 +77,20 @@ local function resetInfected(data)
 end
 
 local function recieveGameState(data)
-	local varData = jsonDecode(data)
+	local data = jsonDecode(data)
 
-	if not varGameState.gameRunning and varData.gameRunning then
+	if not varGameState.gameRunning and data.gameRunning then
 		for k,vehicle in pairs(MPVehicleGE.getVehicles()) do
-			local varID = vehicle.gameVehicleID
-			local varVeh = be:getObjectByID(ID)
-			if varVeh then
-				vehicle.originalColor = be:getObjectByID(varID).color
-				vehicle.originalcolorPalette0 = be:getObjectByID(varID).colorPalette0
-				vehicle.originalcolorPalette1 = be:getObjectByID(varID).colorPalette1
+			local ID = vehicle.gameVehicleID
+			local veh = be:getObjectByID(ID)
+			if veh then
+				vehicle.originalColor = be:getObjectByID(ID).color
+				vehicle.originalcolorPalette0 = be:getObjectByID(ID).colorPalette0
+				vehicle.originalcolorPalette1 = be:getObjectByID(ID).colorPalette1
 			end
 		end
 	end
-	varGameState = varData
+	varGameState = data
 	be:queueAllObjectLua("if outbreak then outbreak.setGameState("..serialize(varGameState)..") end")
 end
 
@@ -97,20 +107,18 @@ local function mergeTable(table,gamestateTable)
 end
 
 local function updateGameState(data)
-
 	mergeTable(jsonDecode(data),varGameState)
 
 	-- In game messages
-	local varTime = 0
+	local time = 0
 
-	if varGameState.time then varTime = varGameState.time-1 end
+	if varGameState.time then time = varGameState.time-1 end
 
-	local varTxt = ""
+	local txt = ""
 
-	if varGameState.gameRunning and varTime and varTime == 0 then
+	if varGameState.gameRunning and time and time == 0 then
 		MPVehicleGE.hideNicknames(true)
 
-		-- this was disabled in original code
 		--[[if varGameState.settings and varGameState.settings.mode = "competitive" then
 	    	core_input_actionFilter.setGroup('vehicleTeleporting', actionTemplate.vehicleTeleporting)
 			core_input_actionFilter.addAction(0, 'vehicleTeleporting', true)
@@ -121,80 +129,90 @@ local function updateGameState(data)
 	    	core_input_actionFilter.setGroup('freeCam', actionTemplate.freeCam)
 			core_input_actionFilter.addAction(0, 'freeCam', true)
 
-	    	core_input_actionFilter.setGroup('resetPhysics', actionTemplate.resetPhysics)
-			core_input_actionFilter.addAction(0, 'resetPhysics', true)
-		end]]
+	    --	core_input_actionFilter.setGroup('resetPhysics', actionTemplate.resetPhysics)
+		--	core_input_actionFilter.addAction(0, 'resetPhysics', true)
+		--end
+		]]
 	end
 
-	if varTime and varTime < 0 then
-		varTxt = "Game starts in "..math.abs(varTime).." seconds..."
-	elseif varGameState.gameRunning and not varGameState.gameEnding and varTime or varGameState.endtime and (varGameState.endtime - varTime) > 9 then
-		
-		-- disabled in original code
-		--local InfectedPlayers = varGameState.InfectedPlayers
-		--local nonInfectedPlayers = varGameState.nonInfectedPlayers
-
-		local varTimeLeft = secondsToDaysHoursMinutesSeconds(varGameState.varRoundLength - varTime)
-		varTxt = "Infected: "..varGameState.InfectedPlayers.."/"..varGameState.playerCount..", Time Left "..varTimeLeft..""
-	elseif varTime and varGameState.endtime and (varGameState.endtime - varTime) < 7 then
-
-		-- disabled in original code
-		--local InfectedPlayers = varGameState.InfectedPlayers
-		--local nonInfectedPlayers = varGameState.nonInfectedPlayers
-
-		local varTimeLeft = varGameState.endtime - varTime
-		varTxt = "Infected: "..varGameState.InfectedPlayers.."/"..varGameState.playerCount..", Colors reset in "..math.abs(varTimeLeft-1).." seconds..."
-
+	if time and time < 0 then
+		txt = "Game starts in "..math.abs(time).." seconds..."
+	elseif varGameState.gameRunning and not varGameState.gameEnding and time or varGameState.endtime and (varGameState.endtime - time) > 9 then
+		local timeLeft = secondsToDaysHoursMinutesSeconds(varGameState.varRoundLength - time)
+		txt = "Infected: "..varGameState.InfectedPlayers.."/"..varGameState.playerCount..", Time Left "..timeLeft..""
+	elseif time and varGameState.endtime and (varGameState.endtime - time) < 7 then
+		local timeLeft = varGameState.endtime - time
+		txt = "Infected: "..varGameState.InfectedPlayers.."/"..varGameState.playerCount..", Colors reset in "..math.abs(timeLeft-1).." seconds"
 	end
-	if varTxt ~= "" then
-		guihooks.message({varTxt = varTxt}, 1, "outbreak.time")
+	
+	if txt ~= "" then
+		guihooks.message({txt = txt}, 1, "outbreak.time")
 	end
-	--\n
+	
 	if varGameState.gameEnded then
 		resetInfected()
 	end
 end
 
 local function requestGameState()
-	if TriggerServerEvent then TriggerServerEvent("requestGameState","nil") end
+	if TriggerServerEvent then
+		TriggerServerEvent("requestGameState","nil")
+	end
 end
 
 local function sendContact(vehID,localVehID)
-	if not MPVehicleGE or MPCoreNetwork and not MPCoreNetwork.isMPSession() then return end
-	local varLocalVehPlayerName = MPVehicleGE.getNicknameMap()[localVehID]
-	local varVehPlayerName = MPVehicleGE.getNicknameMap()[vehID]
-	if varGameState.players[varVehPlayerName] and varGameState.players[varLocalVehPlayerName] then -- if both clients agree that they are both in contact with each other
-		if varGameState.players[varVehPlayerName].infected ~= varGameState.players[varLocalVehPlayerName].infected then -- if the remote player is not equal to the local player
-    		local varServerVehID = MPVehicleGE.getServerVehicleID(vehID)
-			local varRemotePlayerID, vehicleID = string.match(varServerVehID, "(%d+)-(%d+)")
-			if TriggerServerEvent then TriggerServerEvent("onContact", varRemotePlayerID) end
+	if not MPVehicleGE or MPCoreNetwork and not MPCoreNetwork.isMPSession() then
+		return
+	end
+	
+	local LocalvehPlayerName = MPVehicleGE.getNicknameMap()[localVehID]
+	local vehPlayerName = MPVehicleGE.getNicknameMap()[vehID]
+	
+	if varGameState.players[vehPlayerName] and varGameState.players[LocalvehPlayerName] then
+		if varGameState.players[vehPlayerName].infected ~= varGameState.players[LocalvehPlayerName].infected then
+    		local serverVehID = MPVehicleGE.getServerVehicleID(vehID)
+			local remotePlayerID, vehicleID = string.match(serverVehID, "(%d+)-(%d+)")
+			if TriggerServerEvent then
+				TriggerServerEvent("onContact", remotePlayerID)
+			end
 		end
 	end
 end
 
 local function recieveInfected(data)
-	local varPlayerName = data
-	local varPlayerServerName = MPConfig:getNickname()
-	if varPlayerName == varPlayerServerName then
+	local playerName = data
+	local playerServerName = MPConfig:getNickname()
+	if playerName == playerServerName then
 		MPVehicleGE.hideNicknames(false)
 	end
 end
 
 local function onVehicleSwitched(oldID,ID)
-	local varCurentOwnerName = MPConfig.getNickname()
+	local curentOwnerName = MPConfig.getNickname()
 	if ID and MPVehicleGE.getVehicleByGameID(ID) then
-		varCurentOwnerName = MPVehicleGE.getVehicleByGameID(ID).ownerName
+		curentOwnerName = MPVehicleGE.getVehicleByGameID(ID).ownerName
 	end
 
-	if varGameState.players and varGameState.players[varCurentOwnerName] and varGameState.players[varCurentOwnerName].infected then
+	if varGameState.players and varGameState.players[curentOwnerName] and varGameState.players[curentOwnerName].infected then
 		MPVehicleGE.hideNicknames(false)
-	elseif varGameState.players and varGameState.players[varCurentOwnerName] and not varGameState.players[varCurentOwnerName].infected then
+	elseif varGameState.players and varGameState.players[curentOwnerName] and not varGameState.players[curentOwnerName].infected then
 		MPVehicleGE.hideNicknames(true)
 	end
 end
 
+--[[local function nametags(curentOwnerName,player,vehicle)
+	if varGameState.players[curentOwnerName] and varGameState.players[curentOwnerName].infected and not player.infected and curentOwnerName ~= vehicle.ownerName then
+		local veh = be:getObjectByID(vehicle.gameVehicleID)
+		if veh then
+			local vehPos = veh:getPosition()
+			local posOffset = vec3(0,0,2)
+			debugDrawer:drawTextAdvanced(vehPos+posOffset, String(" Survivor "), ColorF(1,1,1,1), true, false, ColorI(200,50,50,255))
+		end
+	end
+end]]
+
 local function nametags(curentOwnerName,player,vehicle)
-	-- show red Survivor tag to Infected players in Infected mode
+	-- show red Survivor tag to Zombies players in Infected mode
 	if varGameState.players[curentOwnerName] and varGameState.players[curentOwnerName].infected and not player.infected and curentOwnerName ~= vehicle.ownerName then
 		local varVeh = be:getObjectByID(vehicle.gameVehicleID)
 		if varVeh then
@@ -214,6 +232,17 @@ local function nametags(curentOwnerName,player,vehicle)
 		end
 	end
 	
+	-- show Zombie tag to Zombies
+	if varGameState.players[curentOwnerName] and varGameState.players[curentOwnerName].infected and player.infected and curentOwnerName ~= vehicle.ownerName then
+		local varVeh = be:getObjectByID(vehicle.gameVehicleID)
+		if varVeh then
+			local varVehPos = varVeh:getPosition()
+			local varPositionOffset = vec3(0,0,2)
+			debugDrawer:drawTextAdvanced(varVehPos+varPositionOffset, String(" Zombie - teammate "), ColorF(1,1,1,1), true, false, ColorI(0,175,0,255))
+		end
+	end
+	
+	--[[
 	-- show yellow Infected tag to Survivors -- and Zombies during Survival mode
 	if varGameState.players[curentOwnerName] and not varGameState.players[curentOwnerName].infected and not player.infected and curentOwnerName ~= vehicle.ownerName then
 		local varVeh = be:getObjectByID(vehicle.gameVehicleID)
@@ -221,10 +250,9 @@ local function nametags(curentOwnerName,player,vehicle)
 			local varVehPos = varVeh:getPosition()
 			local varPositionOffset = vec3(0,0,2)
 			debugDrawer:drawTextAdvanced(varVehPos+varPositionOffset, String(" Infected - teammate "), ColorF(1,1,1,1), true, false, ColorI(200,50,50,255))
-			
-			
 		end
 	end
+	]]
 end
 
 local function color(player,vehicle,dt)
@@ -233,60 +261,62 @@ local function color(player,vehicle,dt)
 			vehicle.transition = 1
 			vehicle.colortimer = 1.6
 		end
-		local varVeh = be:getObjectByID(vehicle.gameVehicleID)
-		if varVeh then
+		
+		local veh = be:getObjectByID(vehicle.gameVehicleID)
+		
+		if veh then
 			if not vehicle.originalColor then
-				vehicle.originalColor = varVeh.color
+				vehicle.originalColor = veh.color
 			end
+
 			if not vehicle.originalcolorPalette0 then
-				vehicle.originalcolorPalette0 = varVeh.colorPalette0
+				vehicle.originalcolorPalette0 = veh.colorPalette0
 			end
+
 			if not vehicle.originalcolorPalette1 then
-				vehicle.originalcolorPalette1 = varVeh.colorPalette1
+				vehicle.originalcolorPalette1 = veh.colorPalette1
 			end
 
 			if not varGameState.gameEnding or (varGameState.endtime - varGameState.time) > 1 then
-				local varTransition = vehicle.transition
-				local varColortimer = vehicle.colortimer
-				local varColor = 0.6 - (1*((1+math.sin(varColortimer))/2)*0.2)
-				local varColorFade = (1*((1+math.sin(varColortimer))/2))*math.max(0.6,varTransition)
-				local varGreenFade = 1 -((1*((1+math.sin(varColortimer))/2))*(math.max(0.6,varTransition)))
+				local transition = vehicle.transition
+				local colortimer = vehicle.colortimer
+				local color = 0.6 - (1*((1+math.sin(colortimer))/2)*0.2)
+				local colorfade = (1*((1+math.sin(colortimer))/2))*math.max(0.6,transition)
+				local greenfade = 1 -((1*((1+math.sin(colortimer))/2))*(math.max(0.6,transition)))
+
 				if varGameState.settings and not varGameState.settings.ColorPulse then
-					varColor = 0.6
-					varColorFade = varTransition
-					varGreenFade = 1 - varTransition
+					color = 0.6
+					colorfade = transition
+					greenfade = 1 - transition
 				end
-				--dump(k,varColorFade,varGreenFade,varTransition,varColortimer,varGameState.settings)
-
 		
-				varVeh.color = ColorF(vehicle.originalColor.x*varColorFade,(vehicle.originalColor.y*varColorFade) + (varColor*varGreenFade), vehicle.originalColor.z*varColorFade, vehicle.originalColor.w):asLinear4F()
-				varVeh.colorPalette0 = ColorF(vehicle.originalcolorPalette0.x*varColorFade,(vehicle.originalcolorPalette0.y*varColorFade) + (varColor*varGreenFade), vehicle.originalcolorPalette0.z*varColorFade, vehicle.originalcolorPalette0.w):asLinear4F()
-				varVeh.colorPalette1 = ColorF(vehicle.originalcolorPalette1.x*varColorFade,(vehicle.originalcolorPalette1.y*varColorFade) + (varColor*varGreenFade), vehicle.originalcolorPalette1.z*varColorFade, vehicle.originalcolorPalette1.w):asLinear4F()
+				veh.color = ColorF(vehicle.originalColor.x*colorfade,(vehicle.originalColor.y*colorfade) + (color*greenfade), vehicle.originalColor.z*colorfade, vehicle.originalColor.w):asLinear4F()
+				veh.colorPalette0 = ColorF(vehicle.originalcolorPalette0.x*colorfade,(vehicle.originalcolorPalette0.y*colorfade) + (color*greenfade), vehicle.originalcolorPalette0.z*colorfade, vehicle.originalcolorPalette0.w):asLinear4F()
+				veh.colorPalette1 = ColorF(vehicle.originalcolorPalette1.x*colorfade,(vehicle.originalcolorPalette1.y*colorfade) + (color*greenfade), vehicle.originalcolorPalette1.z*colorfade, vehicle.originalcolorPalette1.w):asLinear4F()
 			
-				vehicle.colortimer = varColortimer + (dt*2.6)
-				if varTransition > 0 then
-					vehicle.transition = math.max(0,varTransition - dt)
+				vehicle.colortimer = colortimer + (dt*2.6)
+
+				if transition > 0 then
+					vehicle.transition = math.max(0,transition - dt)
 				end
 
-				vehicle.color = varColor
-				vehicle.colorfade = varColorFade
-				vehicle.greenfade = varGreenFade
+				vehicle.color = color
+				vehicle.colorfade = colorfade
+				vehicle.greenfade = greenfade
 			elseif (varGameState.endtime - varGameState.time) <= 1 then
-				local varTransition = vehicle.transition
-				local varColor = vehicle.color or 0
-				local varColorFade = vehicle.colorfade or 1
-				local varGreenFade = vehicle.greenfade or 0
-				--dump(k,varColorFade,varGreenFade,varTransition,vehicle.colortimer)
-			
-				varVeh.color = ColorF(vehicle.originalColor.x*varColorFade,(vehicle.originalColor.y*varColorFade) + (varColor*varGreenFade), vehicle.originalColor.z*varColorFade, vehicle.originalColor.w):asLinear4F()
-				varVeh.colorPalette0 = ColorF(vehicle.originalcolorPalette0.x*varColorFade,(vehicle.originalcolorPalette0.y*varColorFade) + (varColor*varGreenFade), vehicle.originalcolorPalette0.z*varColorFade, vehicle.originalcolorPalette0.w):asLinear4F()
-				varVeh.colorPalette1 = ColorF(vehicle.originalcolorPalette1.x*varColorFade,(vehicle.originalcolorPalette1.y*varColorFade) + (varColor*varGreenFade), vehicle.originalcolorPalette1.z*varColorFade, vehicle.originalcolorPalette1.w):asLinear4F()
-			
-				vehicle.colorfade = math.min(1,varColorFade + dt)
-				vehicle.greenfade = math.max(0,varGreenFade - dt)
+				local transition = vehicle.transition
+				local color = vehicle.color or 0
+				local colorfade = vehicle.colorfade or 1
+				local greenfade = vehicle.greenfade or 0
+				veh.color = ColorF(vehicle.originalColor.x*colorfade,(vehicle.originalColor.y*colorfade) + (color*greenfade), vehicle.originalColor.z*colorfade, vehicle.originalColor.w):asLinear4F()
+				veh.colorPalette0 = ColorF(vehicle.originalcolorPalette0.x*colorfade,(vehicle.originalcolorPalette0.y*colorfade) + (color*greenfade), vehicle.originalcolorPalette0.z*colorfade, vehicle.originalcolorPalette0.w):asLinear4F()
+				veh.colorPalette1 = ColorF(vehicle.originalcolorPalette1.x*colorfade,(vehicle.originalcolorPalette1.y*colorfade) + (color*greenfade), vehicle.originalcolorPalette1.z*colorfade, vehicle.originalcolorPalette1.w):asLinear4F()
+				vehicle.colorfade = math.min(1,colorfade + dt)
+				vehicle.greenfade = math.max(0,greenfade - dt)
 				vehicle.colortimer = 1.6
-				if varTransition < 1 then
-					vehicle.transition = math.min(1,varTransition + dt)
+
+				if transition < 1 then
+					vehicle.transition = math.min(1,transition + dt)
 				end
 			end
 		end
@@ -294,34 +324,37 @@ local function color(player,vehicle,dt)
 end
 
 local function onPreRender(dt)
-
-	if MPCoreNetwork and not MPCoreNetwork.isMPSession() then return end
-	if not varGameState.gameRunning then return end
-
-	local varCurrentVehID = be:getPlayerVehicleID(0)
-	local varCurentOwnerName = MPConfig.getNickname()
-
-	if varCurrentVehID and MPVehicleGE.getVehicleByGameID(varCurrentVehID) then
-		varCurentOwnerName = MPVehicleGE.getVehicleByGameID(varCurrentVehID).ownerName
+	if MPCoreNetwork and not MPCoreNetwork.isMPSession() then
+		return
+	end
+	
+	if not varGameState.gameRunning then
+		return
 	end
 
-	local varClosestInfected = 100000000
-	--local infectedClose = false
+	local currentVehID = be:getPlayerVehicleID(0)
+	local curentOwnerName = MPConfig.getNickname()
 
+	if currentVehID and MPVehicleGE.getVehicleByGameID(currentVehID) then
+		curentOwnerName = MPVehicleGE.getVehicleByGameID(currentVehID).ownerName
+	end
+
+	local closestInfected = 100000000
+	
 	for k,vehicle in pairs(MPVehicleGE.getVehicles()) do
 		if varGameState.players then
-			local varPlayer = varGameState.players[vehicle.ownerName]
-			if varPlayer then
-				nametags(varCurentOwnerName,varPlayer,vehicle)
-				color(varPlayer,vehicle,dt)
-				if varGameState.players[varCurentOwnerName] and varCurrentVehID and not varGameState.players[varCurentOwnerName].infected and varGameState.players[vehicle.ownerName].infected and varCurrentVehID ~= vehicle.gameVehicleID then
-					local varMyVehicle = be:getObjectByID(varCurrentVehID)
-					local varVehicle = be:getObjectByID(vehicle.gameVehicleID)
-					if varVehicle and varMyVehicle then
+			local player = varGameState.players[vehicle.ownerName]
+			if player then
+				nametags(curentOwnerName,player,vehicle)
+				color(player,vehicle,dt)
+				if varGameState.players[curentOwnerName] and currentVehID and not varGameState.players[curentOwnerName].infected and varGameState.players[vehicle.ownerName].infected and currentVehID ~= vehicle.gameVehicleID then
+					local myVeh = be:getObjectByID(currentVehID)
+					local veh = be:getObjectByID(vehicle.gameVehicleID)
+					if veh and myVeh then
 						if varGameState.players[vehicle.ownerName].infected then
-							local distance = distance(varMyVehicle:getPosition(),varVehicle:getPosition())
-							if distance < varClosestInfected then
-								varClosestInfected = distance
+							local distance = distance(myVeh:getPosition(),veh:getPosition())
+							if distance < closestInfected then
+								closestInfected = distance
 							end
 						end
 					end
@@ -330,13 +363,15 @@ local function onPreRender(dt)
 		end
 	end
 
-	local varTempSetting = varDefaultGreenFadeDistance
+	local tempSetting = varDefaultGreenFadeDistance
+	
 	if varGameState.settings then
-		varTempSetting = varGameState.settings.GreenFadeDistance
+		tempSetting = varGameState.settings.GreenFadeDistance
 	end
-	varDistancecolor = math.min(0.4,1 -(varClosestInfected/(varTempSetting or varDefaultGreenFadeDistance)))
+	
+	varDistanceColor = math.min(0.4,1 - (closestInfected/(tempSetting or varDefaultGreenFadeDistance)))
 
-	--[[if varDistancecolor > 0 then
+	--[[if varDistanceColor > 0 then
 		core_input_actionFilter.setGroup('vehicleTeleporting', actionTemplate.vehicleTeleporting)
 		core_input_actionFilter.addAction(0, 'vehicleTeleporting', true)
 
@@ -346,22 +381,22 @@ local function onPreRender(dt)
 		core_input_actionFilter.addAction(0, 'vehicleTeleporting', false)
 		core_input_actionFilter.addAction(0, 'resetPhysics', false)
 	end
+	]]
 	
-	dump(varDistancecolor)]]
-	
-	if varGameState.settings and varGameState.settings.infectorTint and varGameState.players[varCurentOwnerName] and varGameState.players[curentOwnerName].infected then
-		varDistancecolor = varGameState.settings.distancecolor or 0.5
+	if varGameState.settings and varGameState.settings.infectorTint and varGameState.players[curentOwnerName] and varGameState.players[curentOwnerName].infected then
+		varDistanceColor = varGameState.settings.varDistanceColor or 0.5
 	end
-	--dump(varDistancecolor)
-	scenetree["PostEffectCombinePassObject"]:setField("enableBlueShift", 0,distancecolor)
+
+	scenetree["PostEffectCombinePassObject"]:setField("enableBlueShift", 0,varDistanceColor)
 	scenetree["PostEffectCombinePassObject"]:setField("blueShiftColor", 0,"0 1 0")
 end
 
 local function onResetGameplay(id)
-	--[[dump(varDistancecolor , be:getPlayerVehicleID(0) , id )
-	if varDistancecolor > 0 and id == 0 then
+	--[[dump(varDistanceColor , be:getPlayerVehicleID(0) , id )
+	if varDistanceColor > 0 and id == 0 then
 		guihooks.message({txt = "Infector to close, cannot Reset"}, 1, "outbreak.reset")
-	end]]
+	end
+	]]
 end
 
 local function onExtensionUnloaded()
@@ -382,6 +417,6 @@ M.onVehicleSwitched = onVehicleSwitched
 M.resetInfected = resetInfected
 M.onExtensionUnloaded = onExtensionUnloaded
 M.onResetGameplay = onResetGameplay
---M.gamestate = gamestate
+--M.varGameState = varGameState
 
 return M
