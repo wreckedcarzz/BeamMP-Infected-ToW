@@ -58,6 +58,7 @@ TODO no tabbing when not infected / all players
 TODO no restore/repair if within zombie tint area
 
 TODO if event in progress, remove newly spawned car 
+TODO have teams and healing
 --this may not be necessary
 ]]
 
