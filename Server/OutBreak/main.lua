@@ -1,13 +1,13 @@
---original code: https://github.com/Olrosse/BeamMP-Outbreak
---code contributions, edits, and clarity by wreckedcarzz (https://wreckedcarzz.com)
-
+-- original code: https://github.com/Olrosse/BeamMP-Outbreak
+-- code contributions, edits, and clarity by wreckedcarzz (https://wreckedcarzz.com) for the Talons of War clan (https://TalonsOfWar.com)
+-- if you change/edit/use any of my altered code, I simply ask that you retain this notice - and any other notices in any other files - as credit to my hard work
 
 
 ---settings---
 local varAutoStartDelay = 90 -- what the delay between autostartted rounds should be
 local varAutoStartEnabled = false -- if the game automatically starts every varAutoStartDelay sectonds
 local varAutoStartReminderInterval = 120 -- how many seconds (with at least 2 players) without a zombie match starting to remind the players how to play
-local varDiscordURL = "https://discord.gg/REPLACE ME" -- the permanent Discord invite URL
+local varDiscordURL = "https://discord.gg/REPLACE ME" -- the permanent Discord invite URL, used for /support
 local varInfectedNearbyDistance = 250 -- how close the infected player(s) have to be for the screen to start turning green; in meters
 local varInfectedTintIntensity = 0.5 -- max intensity of the green filter; 0.00 to 1.00
 local varInfectedPulsingColor = false -- if the infected player(s) car(s) should pulse between the car's original color and green
@@ -46,20 +46,23 @@ DONE comment cleanupDONE messages for demeting a car and leaving during a match
 DONE appears to be no possible error with leaving players not being subtracted from the game
 DONE added /support and supporting variables
 DONE show names with succesful setting change / game start, stop, etc events
+DONE temporarily disable reminder 
 
 TEST colored nametags for teams
+TEST reset settings
 
 BROKE start with multiple infected
 -- while/do loop broken
 
 TODO change in-code setting names
+TODO check if player starting match has a vehicle
+TODO afk kick
 
 TODO no tabbing when not infected / all players
 TODO no restore/repair if within zombie tint area
 
-TODO if event in progress, remove newly spawned car 
+TODO if event in progress, remove newly spawned car --this may not be necessary
 TODO have teams and healing
---this may not be necessary
 ]]
 
 
@@ -71,12 +74,16 @@ gameState.gameEnding = false
 gameState.gameRunning = false
 local varAutoStartReminder = 0
 local varAutoStartTimer = 0
+local varDateEdited = "2023.09.17"
 local varExcludedPlayers = {} --TODO make these do something
 local varFloor = math.floor
 local varLastState = gameState
 local varIncludedPlayers = {} --TODO make these do something
 local varMod = math.fmod
 local varNoticeSwitch = true
+local varNotifyCreditsAfter = 5
+local varNotifyCreditsAfterCount = 0
+--local varNotifyDisable = false
 local varWeightingArray = {}
 
 MP.RegisterEvent("onContact", "onContact")
@@ -529,6 +536,14 @@ function timer() -- I think this runs every 1s
 			varAutoStartReminder = 0
 			MP.SendChatMessage(-1,"You can start a zombie match quickly by typing '/"..varWakeWord.." autostart', or see the settings by typing /"..varWakeWord.." help'.")
 		end
+	elseif gameState.gameEnded and varNotifyCreditsAfter < varNotifyCreditsAfterCount then
+		varNotifyCreditsAfterCount = varNotifyCreditsAfterCount + 1
+	elseif gameState.gameEnded and varNotifyCreditsAfter == varNotifyCreditsAfterCount then
+		MP.SendChatMessage(-1,"BeamMP Infected (ToW), version "..varDateEdited..".")
+		MP.SendChatMessage(-1,"Original code by: Olrosse, Stefan750, and Saile; https://github.com/Olrosse/BeamMP-Outbreak")
+		MP.SendChatMessage(-1,"Code improvements, clarity, cleanup, and additional features by wreckedcarzz (https://wreckedcarzz.com) for the Talons of War clan (https://TalonsOfWar.com) BeamMP servers.")
+		gameState.gameEnded = false
+		varNotifyCreditsAfterCount = 0
 	end
 end
 
@@ -599,6 +614,17 @@ function outbreakChatMessageHandler(sender_id, sender_name, message)
 		else --for debuging
 			MP.SendChatMessage(sender_id,"Error, recieved: "..value)
 		end 
+		
+		return 1
+	
+	elseif string.find(message,"/"..varWakeWord.." quiet %d+") then
+		local valueToText = tonumber(string.sub(message,17,10000))
+		local value = valueToText
+		value = value*60
+		--varNotifyDisable = true
+		varAutoStartReminder = -value
+		--varAutoStartReminder = varAutoStartReminder - varAutoStartReminder - varAutoStartReminder
+		MP.SendChatMessage(sender_id,"Successfully quieted the reminder for "..valueToText.." minutes.")
 		
 		return 1
 	
@@ -707,8 +733,21 @@ function outbreakChatMessageHandler(sender_id, sender_name, message)
 		return 1
 
     elseif message == "/"..varWakeWord.." reset" then
-			varWeightingArray = {}
-			MP.SendChatMessage(-1,sender_name.." reset the weighted random system.")
+		varWeightingArray = {}
+		MP.SendChatMessage(-1,sender_name.." reset the weighted random system.")
+
+		varAutoStartDelay = 90 -- what the delay between autostartted rounds should be
+		varAutoStartEnabled = false -- if the game automatically starts every varAutoStartDelay sectonds
+		varInfectedNearbyDistance = 250 -- how close the infected player(s) have to be for the screen to start turning green; in meters
+		varInfectedTintIntensity = 0.5 -- max intensity of the green filter; 0.00 to 1.00
+		varInfectedPulsingColor = false -- if the infected player(s) car(s) should pulse between the car's original color and green
+		varInfectedTintedScreen = false -- if infected player(s) should have a green tint applied to their scrfeen
+		-- varMaxNumberOfStartingZombies = 1 -- set the max number of infected at the beginning of each round
+		varNotifyDuringMatch = true -- if the chat box should be used as a deterrent for car spawns or edits during a match (also see below)
+		varRoundLength = 10*60 -- lenght of the game, in seconds (minutes*seconds, so default is 10 minutes)
+		varStartingSeconds = 10 -- the number of seconds before the initial player is revealed as infected
+		MP.SendChatMessage(-1,sender_name.." reset all configurable in-game settings.")
+
 		return 1
 	
 	elseif message == "/support" then
@@ -716,8 +755,9 @@ function outbreakChatMessageHandler(sender_id, sender_name, message)
 		return 1
 		
 	elseif message == "/"..varWakeWord.." credits" then
-		MP.SendChatMessage(sender_id,"Original code by: Olrosse, Stefan750, and Saile; https://github.com/Olrosse/BeamMP-Outbreak/tree/v0.2.0")
-		MP.SendChatMessage(sender_id,"Code improvements, cleanup, feature enabling and refinement by wreckedcarzz (https://wreckedcarzz.com) for the Talons of War (https://TalonsOfWar.com) BeamMP servers.")
+		MP.SendChatMessage(sender_id,"BeamMP Infected (ToW), version "..varDateEdited..".")
+		MP.SendChatMessage(sender_id,"Original code by: Olrosse, Stefan750, and Saile; https://github.com/Olrosse/BeamMP-Outbreak")
+		MP.SendChatMessage(sender_id,"Code improvements, clarity, cleanup, and additional features by wreckedcarzz (https://wreckedcarzz.com) for the Talons of War clan (https://TalonsOfWar.com) BeamMP servers.")
 		
 		return 1
 		
@@ -728,7 +768,8 @@ function outbreakChatMessageHandler(sender_id, sender_name, message)
 		MP.SendChatMessage(sender_id,"/"..varWakeWord.." autostart")
 		MP.SendChatMessage(sender_id,"/"..varWakeWord.." autostart delay [seconds]")
 		MP.SendChatMessage(sender_id,"/"..varWakeWord.." length [minutes]")
-		MP.SendChatMessage(sender_id,"/"..varWakeWord.." reset (resets the infection randomizer)")
+		MP.SendChatMessage(sender_id,"/"..varWakeWord.." quiet [minutes] (how many minutes to quiet the reminder about how to play)")
+		MP.SendChatMessage(sender_id,"/"..varWakeWord.." reset (resets the infection randomizer, and any adjusted settings)")
 		MP.SendChatMessage(sender_id,"/"..varWakeWord.." credits")
 		MP.SendChatMessage(sender_id,"/"..varWakeWord.." advancedSettings")
 	elseif message == "/"..varWakeWord.." advancedSettings" then
