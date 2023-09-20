@@ -1,21 +1,26 @@
---original code: https://github.com/Olrosse/BeamMP-Outbreak
---code contributions, edits, and clarity by wreckedcarzz (https://wreckedcarzz.com)
-
+-- original code: https://github.com/Olrosse/BeamMP-Outbreak
+-- code contributions, edits, and clarity by wreckedcarzz (https://wreckedcarzz.com) for the Talons of War clan (https://TalonsOfWar.com)
+-- if you change/edit/use/share any of my altered code, I simply ask that you retain this notice - and any other notices in any other files - as credit to my hard work
 
 
 ---settings---
 local varAutoStartDelay = 90 -- what the delay between autostartted rounds should be
-varAutoStartEnabled = false -- if the game automatically starts every varAutoStartDelay sectonds
+local varAutoStartEnabled = false -- if the game automatically starts every varAutoStartDelay sectonds
+local varAutoStartReminderInterval = 120 -- how many seconds (with at least 2 players) without a zombie match starting to remind the players how to play
+local varDiscordURL = "https://discord.gg/REPLACE_ME" -- the permanent Discord invite URL, used for /support
 local varInfectedNearbyDistance = 250 -- how close the infected player(s) have to be for the screen to start turning green; in meters
 local varInfectedTintIntensity = 0.5 -- max intensity of the green filter; 0.00 to 1.00
 local varInfectedPulsingColor = false -- if the infected player(s) car(s) should pulse between the car's original color and green
 local varInfectedTintedScreen = false -- if infected player(s) should have a green tint applied to their scrfeen
+--local varMaxNumberOfStartingZombies = 1 -- set the max number of infected at the beginning of each round
 local varNotifyDuringMatch = true -- if the chat box should be used as a deterrent for car spawns or edits during a match (also see below)
 local varNotifyEveryTime = 5 -- the number of seconds between the chat box notification
 local varNotifySpawnEditText = "INFECTION MATCH IN PROGRESS! DO NOT SPAWN OR EDIT VEHICLES!" -- text used to deter players from making any new 'events' that will desync players and break the game, causing affected players to rejoin the server
 local varNotifyRepairRespawn = "ALL players must come to a COMPLETE STOP before repairing; non-infected must NOT have a green-tinted screen to repair." -- explaining rules regarding repairing
 local varRoundLength = 10*60 -- lenght of the game, in seconds (minutes*seconds, so default is 10 minutes)
+local varServerOwner = "wreckedcarzz" -- name of the server owner
 local varStartingSeconds = 10 -- the number of seconds before the initial player is revealed as infected
+local varSupportMessage = "Hello! If you are being harassed or bothered, or if a player is ruining your activity, you can first 'vote kick' them via the blue Cobalt Essentials Interface, and if enough players also vote to remove them, they will be kicked. If the situation is more serious, or if they return and continue to bother players, reach out to the server owner ("..varServerOwner..") or an admin or mod (orange or yellow nametag in Cobalt), or use the Discord server to reach us: "..varDiscordURL.." under #help. We are here for you!"
 local varWakeWord = "infected" -- customizable word for text commands ( /varWakeWord <action> ) CRITICAL NOTE: if you change this to anything but "infected" or "outbreak", you need to update the 3 instances of "local value = tonumber(string.sub(message,<THIS-NUMBER>,10000))" where THIS NUMBER is the total number of characters, including the /, until and including the % for the settings menu to be functional
 ---end settings area---
 
@@ -37,44 +42,67 @@ DONE offer credits/info through wakeWord
 DONE variables renamed within functions
 DONE error with advanced settings text
 DONE if < 2 players, disable autostart countdown
+DONE spelling/more grammer issues fixed
+DONE comment cleanupDONE messages for demeting a car and leaving during a match
+DONE appears to be no possible error with leaving players not being subtracted from the game
+DONE added /support and supporting variables
+DONE show names with succesful setting change / game start, stop, etc events
+DONE temporarily disable reminder 
+DONE reset settings
+DONE made support text a variable
 
-SOME possible error with leaving players not subtracting from game
+TEST colored nametags for teams
+TEST credits 5s after a match
+ 
+BROKE start with multiple infected
+-- while/do loop broken
 
-TODO start with multiple infected
-TODO tell players how to start zombie mode, for when no admin is present
+TODO add 'spectator' tag to list for new joins that are not in match
+TODO > 1 player autostart
 TODO change in-code setting names
+TODO check if player starting match has a vehicle
+TODO afk kick
 
 TODO no tabbing when not infected / all players
 TODO no restore/repair if within zombie tint area
-TODO if event in progress, remove newly spawned car 
+
+TODO if event in progress, remove newly spawned car --this may not be necessary
+TODO have teams and healing
 ]]
 
 
 
 ---variables (non-settings)---
+gameState = {players = {}}
+gameState.everyoneInfected = false
+gameState.gameEnding = false
+gameState.gameRunning = false
+--varAutoStartDelay = varAutoStartDelay + 5 -- for end of match credits
+local varAutoStartReminder = 0
 local varAutoStartTimer = 0
+local varDateEdited = "2023.09.18"
 local varExcludedPlayers = {} --TODO make these do something
 local varFloor = math.floor
+local varLastState = gameState
 local varIncludedPlayers = {} --TODO make these do something
 local varMod = math.fmod
 local varNoticeSwitch = true
-
----variables and executables
-gameState = {players = {}}
-
----variables (non-settings)
-local varLastState = gameState
+local varNotifyCreditsAfter = 5
+local varNotifyCreditsAfterCount = 0
+--local varNotifyDisable = false
 local varWeightingArray = {}
 
-
-
-gameState.everyoneInfected = false
-gameState.gameRunning = false
-gameState.gameEnding = false
-
+MP.RegisterEvent("onContact", "onContact")
 MP.RegisterEvent("onContactRecieve","onContact")
 MP.RegisterEvent("requestGameState","requestGameState")
+MP.RegisterEvent("second", "timer")
 MP.TriggerClientEvent(-1, "resetInfected", "data")
+
+MP.CancelEventTimer("counter")
+MP.CancelEventTimer("second")
+MP.CreateEventTimer("second",1000)
+
+-- game logic
 
 local function secondsToDaysHoursMinutesSeconds(totalSeconds) --modified code from https://stackoverflow.com/questions/45364628/lua-4-script-to-convert-seconds-elapsed-to-days-hours-minutes-seconds
     local varDays     = varFloor(totalSeconds / 86400)
@@ -154,15 +182,13 @@ local function infectPlayer(varPlayerName,varForce)
 		MP.TriggerClientEvent(-1, "recieveInfected", varPlayerName)
 
 		updateClients()
-		-- this is commented in the original code
-		--MP.TriggerClientEventJson(-1, "recieveGameState", gameState)
 	end
 end
 
 function onContact(varLocalPlayerID, varData)
 	local varRemotePlayerName = MP.GetPlayerName(tonumber(varData))
 	local varLocalPlayerName = MP.GetPlayerName(varLocalPlayerID)
-	if gameState.gameRunning and not gameState.gameEnding then
+	if gameState.gameRunning and not gameState.gameEnding then  -- game is running and not ending
 		local varLocalPlayer = gameState.players[varLocalPlayerName]
 		local varRemotePlayer = gameState.players[varRemotePlayerName]
 		if varLocalPlayer and varRemotePlayer then
@@ -230,7 +256,7 @@ local function gameSetup() -- has the setting names to change
 	end
 
 	gameState.playerCount = varPlayerCount
-	gameState.InfectedPlayers = 0
+	gameState.InfectedPlayers = 0 -- counting number of zombies
 	gameState.nonInfectedPlayers = varPlayerCount
 	gameState.time = -5
 	gameState.varRoundLength = varRoundLength
@@ -240,6 +266,8 @@ local function gameSetup() -- has the setting names to change
 	gameState.gameRunning = true
 	gameState.gameEnding = false
 	gameState.gameEnded = false
+	
+	varAutoStartReminder = 0
 	
 	MP.TriggerClientEventJson(-1, "recieveGameState", gameState)
 end
@@ -266,14 +294,13 @@ local function gameEnd(varReason)
 	else
 		MP.SendChatMessage(-1,"Game halted for unknown reason; "..varNonInfectedCount.." survived and "..varInfectedCount.." were infected.")
 	end
-	--print(gameState)
 end
 
 local function infectRandomPlayer()
-	gameState.oneInfected = false
-	local varPlayers = gameState.players
+	gameState.oneInfected = false -- no one is infected
+	local varPlayers = gameState.players -- grab details about the players
 	local varWeightRatio = 0
-	for playername,player in pairs(varPlayers) do
+	for playername,player in pairs(varPlayers) do -- for each entry in varPlayers do
 
 		local varInfections = varWeightingArray[playername].infections
 		local varGameCount = varWeightingArray[playername].games
@@ -284,39 +311,48 @@ local function infectRandomPlayer()
 		varWeightRatio = varWeightRatio + weight
 		varWeightingArray[playername].endNumber = varWeightRatio
 		varWeightingArray[playername].weightRatio = varWeightRatio
-		--print(playername,varWeightingArray[playername].endNumber - varWeightingArray[playername].startNumber,varWeightingArray[playername].startNumber , varWeightingArray[playername].endNumber,varWeightingArray[playername].infections,varWeightingArray[playername].games,gameState.playerCount)
 	end
 
 	local varRandomID = math.random(1, math.floor(varWeightRatio))
+	-- this generate a random int that is greater than or equal to 1, but also less than or equal to the largest int returned by math.floor(varWeightRatio); then
+	-- itself is set by 'weight', which in turn is set by math.max given 'varGameCount' divided by 'varInfections' (# of times infected), divddid by 'varPlayerCount'; then
+	-- this is used to devide 1 by the result, multiplied by 100
 	
-	for playername,player in pairs(varPlayers) do
-		if varRandomID >= varWeightingArray[playername].startNumber and varRandomID <= varWeightingArray[playername].endNumber then --if count == varRandomID then
-			if not gameState.oneInfected then
-				gameState.players[playername].remoteContact = true
-				gameState.players[playername].localContact = true
-				gameState.players[playername].infected = true
+	local varNumberOfAssignedZombies = 0
+	
+	--while varNumberOfAssignedZombies < varMaxNumberOfStartingZombies and varNumberOfAssignedZombies < gameState.playerCount do
+		for playername,player in pairs(varPlayers) do
+			if varRandomID >= varWeightingArray[playername].startNumber and varRandomID <= varWeightingArray[playername].endNumber then --if count == varRandomID then
+				if not gameState.players[playername].infected then -- removed 'if not gameState.oneInfected then'
+					gameState.players[playername].remoteContact = true
+					gameState.players[playername].localContact = true
+					gameState.players[playername].infected = true
 
-				if gameState.time == varStartingSeconds then
-					MP.SendChatMessage(-1,""..playername.." is the first infected!")
-				else
-					MP.SendChatMessage(-1,"No infected players; "..playername.." has been randomly infected!")
+					if gameState.time == varStartingSeconds then
+						MP.SendChatMessage(-1,""..playername.." is the first zombie!")
+					else
+						MP.SendChatMessage(-1,"No zombie players; "..playername.." has been randomly infected!")
+					end
+					
+					MP.TriggerClientEvent(-1, "recieveInfected", playername)
+					--gameState.oneInfected = true
+					gameState.InfectedPlayers = gameState.InfectedPlayers + 1
+					gameState.nonInfectedPlayers = gameState.nonInfectedPlayers - 1
+					varNumberOfAssignedZombies = varNumberOfAssignedZombies + 1
 				end
-				MP.TriggerClientEvent(-1, "recieveInfected", playername)
-				gameState.oneInfected = true
-				gameState.InfectedPlayers = gameState.InfectedPlayers + 1
-				gameState.nonInfectedPlayers = gameState.nonInfectedPlayers - 1
+			else
+				varWeightingArray[playername].infections = varWeightingArray[playername].infections + 100
 			end
-		else
-			varWeightingArray[playername].infections = varWeightingArray[playername].infections + 100
 		end
-	end
-	--print(infectedCount , gameState.playerCount , varNonInfectedCount)
+	--end
+	
+	gameState.oneInfected = true
+	
 	if gameState.InfectedPlayers >= gameState.playerCount and gameState.nonInfectedPlayers == 0 then
 		gameState.everyoneInfected = true
 	end
 
 	MP.TriggerClientEventJson(-1, "recieveGameState", gameState)
-	--print(varRandomID,varWeightingArray)
 end
 
 local function gameStarting()
@@ -342,7 +378,7 @@ local function gameStarting()
 			elseif varAmount == 1 then
 				varDays = ""..varDays.." day and "
 			elseif varAmount == 0 then
-				varDays = ""..varDays.." day "
+				varDays = ""..varDays.." day"
 			end
 		else
 			if varAmount > 1 then
@@ -350,7 +386,7 @@ local function gameStarting()
 			elseif varAmount == 1 then
 				varDays = ""..varDays.." days and "
 			elseif varAmount == 0 then
-				varDays = ""..varDays.." days "
+				varDays = ""..varDays.." days"
 			end
 		end
 	end
@@ -362,7 +398,7 @@ local function gameStarting()
 			elseif varAmount == 1 then
 				varHours = ""..varHours.." hour and "
 			elseif varAmount == 0 then
-				varHours = ""..varHours.." hour "
+				varHours = ""..varHours.." hour"
 			end
 		else
 			if varAmount > 1 then
@@ -370,7 +406,7 @@ local function gameStarting()
 			elseif varAmount == 1 then
 				varHours = ""..varHours.." hours and "
 			elseif varAmount == 0 then
-				varHours = ""..varHours.." hours "
+				varHours = ""..varHours.." hours"
 			end
 		end
 	end
@@ -382,7 +418,7 @@ local function gameStarting()
 			elseif varAmount == 1 then
 				varMinutes = ""..varMinutes.." minute and "
 			elseif varAmount == 0 then
-				varMinutes = ""..varMinutes.." minute "
+				varMinutes = ""..varMinutes.." minute"
 			end
 		else
 			if varAmount > 1 then
@@ -390,19 +426,21 @@ local function gameStarting()
 			elseif varAmount == 1 then
 				varMinutes = ""..varMinutes.." minutes and "
 			elseif varAmount == 0 then
-				varMinutes = ""..varMinutes.." minutes "
+				varMinutes = ""..varMinutes.." minutes"
 			end
 		end
 	end
 	if varSeconds then
 		if varSeconds == 1 then
-			varSeconds = ""..varSeconds.." second "
+			varSeconds = ""..varSeconds.." second"
 		else
-			varSeconds = ""..varSeconds.." seconds "
+			varSeconds = ""..varSeconds.." seconds"
 		end
 	end
 
-	MP.SendChatMessage(-1,"Infection game started; you have "..varStartingSeconds.." seconds before the zombie is revealed! Survive for "..(varDays or "0").."days, "..(varHours or "0").." hours, "..(varMinutes or "0").." minutes, and "..(varSeconds or "0").."seconds.")
+	--MP.SendChatMessage(-1,"Infection game started; you have "..varStartingSeconds.." seconds before the zombie is revealed! Survive for "..(varDays or "0").." days, "..(varHours or "0").." hours, "..(varMinutes or "0").." minutes, and "..(varSeconds or "0").." seconds.")
+	MP.SendChatMessage(-1,"Infection game started; you have "..varStartingSeconds.." seconds before the zombie is revealed!")
+	MP.SendChatMessage(-1,"Survive for "..(varDays or "")..""..(varHours or "")..""..(varMinutes or "")..""..(varSeconds or "")..".")
 end
 
 local function gameRunningLoop() --code in this loop runs every 1s during an active match
@@ -435,7 +473,7 @@ local function gameRunningLoop() --code in this loop runs every 1s during an act
 		end
 		
 		for playername,player in pairs(varPlayers) do
-			if player.localContact and player.remoteContact and not player.infected then
+			if player.localContact and player.remoteContact and not player.infected then -- players being made zombies
 				player.infected = true
 				MP.SendChatMessage(-1,""..playername.." has been infected! Run!")
 				MP.TriggerClientEvent(-1, "recieveInfected", playername)
@@ -469,63 +507,62 @@ local function gameRunningLoop() --code in this loop runs every 1s during an act
 	elseif gameState.gameEnding and gameState.time == gameState.endtime then
 		gameState.gameRunning = false
 		
-		-- this is commented in the original code
-		--MP.TriggerClientEvent(-1, "resetInfected", "data")
-		--print(gameState.gameEnding ,gameState.time ,gameState.endtime)
-
 		gameState = {}
 		gameState.players = {}
 		gameState.everyoneInfected = false
 		gameState.gameRunning = false
 		gameState.gameEnding = false
 		gameState.gameEnded = true
-
-		-- this too
-		--MP.TriggerClientEventJson(-1, "recieveGameState", gameState)
 	end
 	if gameState.gameRunning then
 		gameState.time = gameState.time + 1
 	end
 
 	updateClients()
-	--print(gameState)
 end
 
--- MOVED varAutoStartEnabled FROM HERE
--- moved varAutoStartTimer FROM HERE
-
 function timer() -- I think this runs every 1s
-	if gameState.gameRunning then
+	if gameState.gameRunning then -- game is running
 		gameRunningLoop()
-	elseif varAutoStartEnabled and MP.GetPlayerCount() > 1 then --was -1
-		--print(varAutoStartTimer)
+	elseif varAutoStartEnabled and MP.GetPlayerCount() > 1 then -- and not gameState.gameEnded then -- autostart count down
 		if varAutoStartTimer < varAutoStartDelay and string.find(varAutoStartTimer, 0) then
 			MP.SendChatMessage(-1,"Automatic zombie gamemode enabled; "..varAutoStartDelay - varAutoStartTimer.." seconds remaining.")
+			MP.SendChatMessage(-1,"Chat with other players! "..varDiscordURL)
 		elseif varAutoStartTimer + 5 >= varAutoStartDelay then
 			varAutoStartTimer = -1
 			gameSetup()
 		end
 		varAutoStartTimer = varAutoStartTimer + 1
-	-- this needs testing
-	elseif varAutoStartEnabled and MP.GetPlayerCount() < 2 then
+	elseif varAutoStartEnabled and MP.GetPlayerCount() < 2 then -- when there are less than 2 players
 		varAutoStartTimer = 0
-		
-		-- this may not be needed
 		varAutoStartEnabled = false;
 		MP.SendChatMessage(sender_id,"Cannot autostart the match, as it requires at least two (2) players. Autostate disabled.")
+	elseif not gameState.gameRunning and not gameState.gameEnding and not varAutoStartEnabled and MP.GetPlayerCount() > 1 then -- explaining how to start a match, edit settings
+		varAutoStartReminder = varAutoStartReminder + 1
+		if varAutoStartReminder >= varAutoStartReminderInterval then
+			varAutoStartReminder = 0
+			MP.SendChatMessage(-1,"You can start a zombie match quickly by typing '/"..varWakeWord.." autostart', or see the settings by typing /"..varWakeWord.." help'.")
+		end
+	elseif gameState.gameEnded and varNotifyCreditsAfter < varNotifyCreditsAfterCount then -- game has ended but has not reached point where credits show
+		varNotifyCreditsAfterCount = varNotifyCreditsAfterCount + 1
+	--[[elseif gameState.gameEnded and varNotifyCreditsAfter == varNotifyCreditsAfterCount then -- game has ended and credits now show
+		MP.SendChatMessage(-1,"BeamMP Infected (ToW), version "..varDateEdited..".")
+		MP.SendChatMessage(-1,"Original code by: Olrosse, Stefan750, and Saile; https://github.com/Olrosse/BeamMP-Outbreak")
+		MP.SendChatMessage(-1,"Code improvements, clarity, cleanup, and additional features by wreckedcarzz (https://wreckedcarzz.com) for the Talons of War clan (https://TalonsOfWar.com) BeamMP servers.")
+		gameState.gameEnded = false
+		varNotifyCreditsAfterCount = 0
+		]]
 	end
 end
 
-MP.RegisterEvent("onContact", "onContact")
-MP.RegisterEvent("second", "timer")
+-- chat commands
 
-MP.CancelEventTimer("counter")
-MP.CancelEventTimer("second")
-MP.CreateEventTimer("second",1000)
+function count(base, pattern)
+    return select(2, string.gsub(base, pattern, ""))
+end
 
---Chat Commands
 function outbreakChatMessageHandler(sender_id, sender_name, message)
-	if message == "/"..varWakeWord.." join" then -- or string.find(message,"/"..varWakeWord.." join %d+") then
+	--[[if message == "/"..varWakeWord.." join" then -- this doesn't work yet
 		--local number = tonumber(string.sub(message,14,10000))
 		--local playerid = number or sender_id
 		local varTempPlayerName = MP.GetPlayerName(sender_id)
@@ -533,7 +570,7 @@ function outbreakChatMessageHandler(sender_id, sender_name, message)
 		MP.SendChatMessage(sender_id,""..varTempPlayerName.." has been added to the game.")
 		return 1
 		
-	elseif message == "/"..varWakeWord.." leave" then -- or string.find(message,"/"..varWakeWord.." leave %d+") then
+	elseif message == "/"..varWakeWord.." leave" then -- or this
 		--local number = tonumber(string.sub(message,15,10000))
 		--local playerid = number or sender_id
 		local varTempPlayerName = MP.GetPlayerName(sender_id)
@@ -541,31 +578,22 @@ function outbreakChatMessageHandler(sender_id, sender_name, message)
 		MP.SendChatMessage(sender_id,""..varTempPlayerName.." has been removed from the game.")
 		return 1
 		
-	elseif message == "/"..varWakeWord.." start" then -- or string.find(message,"/"..varWakeWord.." start %d+") then
+	else]]
+	--MP.SendChatMessage(sender_id,string.find(message,"/"..varWakeWord.." maxStartingZombies %d+")
+	
+	if message == "/"..varWakeWord.." start" then
 		varAutoStartTimer = 0
 		varAutoStartEnabled = false
 		local number = tonumber(string.sub(message,16,10000))
+		
 		if not gameState.gameRunning then
 			local gameLength = number or varRoundLength
+			MP.SendChatMessage(-1,sender_name.." has initiated an infected match.")
 			gameSetup()
-		else
-			MP.SendChatMessage(sender_id,"Error: gamestart failed, game already running.")
-		end
-
-		return 1
-		
-	elseif message == "/"..varWakeWord.." stop" then
-		if varAutoStartEnabled == true then
-			varAutoStartTimer = 0
-			varAutoStartEnabled = false
-			if gameState.gameRunning then
-				gameEnd("manual")
-			end
-			MP.SendChatMessage(sender_id,"Succesfully turned autostart OFF.")
 		elseif gameState.gameRunning then
-			gameEnd("manual")
+			MP.SendChatMessage(sender_id,"Error: gamestart failed, game already running.")
 		else
-			MP.SendChatMessage(sender_id,"Error: gamestop failed, game not running.")
+			MP.SendChatMessage(sender_id,"Error: something else has occured, and it is very bad; perhaps a variable naming issue.")
 		end
 
 		return 1
@@ -575,7 +603,7 @@ function outbreakChatMessageHandler(sender_id, sender_name, message)
 			if MP.GetPlayerCount() > 1 then
 				varAutoStartTimer = 0
 				varAutoStartEnabled = true
-				MP.SendChatMessage(sender_id,"Succesfully turned autostart ON.")
+				MP.SendChatMessage(-1,sender_name.." successfully turned autostart ON. It is currently set to "..varAutoStartDelay.." seconds.")
 			else
 				MP.SendChatMessage(sender_id,"Failed to enable autostart; this could be because you are by yourself (this mode requires at least two (2) players to start).")
 			end
@@ -585,83 +613,159 @@ function outbreakChatMessageHandler(sender_id, sender_name, message)
 		
 		return 1
 
-	elseif message == "/"..varWakeWord.." autostart delay %d+" then
-		local value = tonumber(string.sub(message,27,10000))
-		varAutoStartDelay = value
-		MP.SendChatMessage(sender_id,"Succesfully adjusted autostart timer to:"..value..".")
+	elseif string.find(message,"/"..varWakeWord.." autostart delay %d+") then
+		local value = tonumber(string.sub(message,1 + string.len(varWakeWord) + 18,10000))
+
+		if value then
+			varAutoStartDelay = value
+			MP.SendChatMessage(-1,sender_name.." successfully adjusted autostart timer to: "..value.." seconds.")
+		else --for debuging
+			MP.SendChatMessage(sender_id,"Error, recieved: "..value)
+		end 
 		
 		return 1
 	
-    elseif string.find(message,"/"..varWakeWord.." length %d+") then
-		local value = tonumber(string.sub(message,18,10000))
+	elseif string.find(message,"/"..varWakeWord.." quiet %d+") then
+		local valueToText = tonumber(string.sub(message,1 + string.len(varWakeWord) + 8,10000))
+		local value = valueToText
+		value = value*60
+		--varNotifyDisable = true
+		varAutoStartReminder = -value
+		--varAutoStartReminder = varAutoStartReminder - varAutoStartReminder - varAutoStartReminder
+		MP.SendChatMessage(sender_id,"Successfully quieted the reminder for "..valueToText.." minutes.")
+		
+		return 1
+	
+    --[[elseif string.find(message,"/"..varWakeWord.." maxStartingZombies %d+") then
+		local value = tonumber(string.sub(message,30,10000))
+		
+		if value then
+			varMaxNumberOfStartingZombies = value
+			MP.SendChatMessage(-1,sender_name.." successfully adjusted the maximum number of initial zombies to: "..value..".")
+		else
+			MP.SendChatMessage(sender_id,"Error: setting maxStartingZombies failed; recieved: "..value..".")
+		end
+		
+		return 1
+	]]
+	elseif message == "/"..varWakeWord.." stop" then
+		if varAutoStartEnabled == true then -- if autostart ON
+			varAutoStartTimer = 0
+			varAutoStartEnabled = false
+			MP.SendChatMessage(-1,sender_name.." successfully turned autostart OFF.")
+			if gameState.gameRunning then -- and if game also running
+				gameEnd("manual")
+				MP.SendChatMessage(-1,sender_name.." successfully STOPPED THE MATCH; if this player is abusing this ability, contact an admin or moderator. Type /support for assistance!")
+			end
+		elseif gameState.gameRunning then -- if autostart OFF and game is running
+			gameEnd("manual")
+			MP.SendChatMessage(-1,sender_name.." successfully STOPPED THE MATCH; if this player is abusing this ability, contact an admin or moderator. Type /support for assistance!")
+		elseif not gameState.gameRunning then -- if autostart OFF and game is NOT running
+			MP.SendChatMessage(sender_id,"Error: stop failed, game not running and autostart is OFF.")
+		else -- ?????
+			MP.SendChatMessage(sender_id,"Error: unknown error.")
+		end
+
+		return 1
+		
+	elseif string.find(message,"/"..varWakeWord.." length %d+") then
+		local value = tonumber(string.sub(message,1 + string.len(varWakeWord) + 9,10000))
+		
 		if value then
 			varRoundLength = value*60
-			MP.SendChatMessage(sender_id,"Successfully set game length to "..value..".")
+			MP.SendChatMessage(-1,sender_name.." successfully set game length to "..value.." minutes.")
 		else
 			MP.SendChatMessage(sender_id,"Error: setting varRoundLength failed, no valid value found.")
 		end
+		
 		return 1
 
     elseif string.find(message,"/"..varWakeWord.." infectedNearbyDistance %d+") then
-		local value = tonumber(string.sub(message,34,10000))
+		local value = tonumber(string.sub(message,1 + string.len(varWakeWord) + 25,10000))
+		
 		if value then
 			varInfectedNearbyDistance = value
 			if gameState.settings then
 				gameState.settings.GreenFadeDistance = varInfectedNearbyDistance
 			end
-			MP.SendChatMessage(sender_id,"Succesfully set infectedNearbyDistance to "..value..".")
+			MP.SendChatMessage(-1,sender_name.." successfully set infectedNearbyDistance to "..value..".")
 		else
 			MP.SendChatMessage(sender_id,"Error: setting infectedNearbyDistance failed, no valid value found.")
 		end
+		
 		return 1
 
-    elseif string.find(message,"/"..varWakeWord.." infectedPulsingColor") then
+    elseif message == "/"..varWakeWord.." infectedPulsingColor" then
 		if varInfectedPulsingColor then
 			varInfectedPulsingColor = false
-			MP.SendChatMessage(sender_id,"Succesfully setting infectedPulsingColor to false/off.")
+			MP.SendChatMessage(-1,sender_name.." successfully setting infectedPulsingColor to false/off.")
 		else
 			varInfectedPulsingColor = true
-			MP.SendChatMessage(sender_id,"Succesfully setting infectedPulsingColor to true/on. NOTE: infectedTintedScreen MUST be set to true/on, otherwise infectedPulsingColor will cause a game crash! It is FALSE/OFF by default!")
+			MP.SendChatMessage(-1,sender_name.." successfully setting infectedPulsingColor to true/on. NOTE: infectedTintedScreen MUST be set to true/on, otherwise infectedPulsingColor will cause a game crash! It is FALSE/OFF by default!")
 		end
+		
 		if gameState.settings then
 			gameState.settings.ColorPulse = varInfectedPulsingColor
 		end
+		
 		return 1
 
-    elseif string.find(message,"/"..varWakeWord.." infectedTintedScreen") then
+    elseif message == "/"..varWakeWord.." infectedTintedScreen" then
 		if varInfectedTintedScreen then
 			varInfectedTintedScreen = false
-			MP.SendChatMessage(sender_id,"Succesfully set infectedTintedScreen to false/off.")
+			MP.SendChatMessage(-1,sender_name.." successfully set infectedTintedScreen to false/off.")
 		else
 			varInfectedTintedScreen = true
-			MP.SendChatMessage(sender_id,"Succesfully set infectedTintedScreen to true/on.")
+			MP.SendChatMessage(-1,sender_name.." successfully set infectedTintedScreen to true/on.")
 		end
+		
 		if gameState.settings then
 			gameState.settings.infectorTint = varInfectedTintedScreen
 		end
+		
 		return 1
 
     elseif string.find(message,"/"..varWakeWord.." infectedTintIntensity %d+") then
-		local value = tonumber(string.sub(message,33,10000))
+		local value = tonumber(string.sub(message,1 + string.len(varWakeWord) + 25,10000))
+		
 		if value then
 			varInfectedTintIntensity = value
 			if gameState.settings then
 				gameState.settings.distancecolor = varInfectedTintIntensity
-			end 
-			MP.SendChatMessage(sender_id,"Succesfully set infectedTintIntensity to "..value..".")
-			
+			end
+			MP.SendChatMessage(-1,sender_name.." successfully set infectedTintIntensity to "..value..".")	
 		else
 			MP.SendChatMessage(sender_id,"Error: setting infectedTintIntensity failed, no valid value found.")
 		end
+		
 		return 1
 
-    elseif string.find(message,"/"..varWakeWord.." reset") then
-			varWeightingArray = {}
+    elseif message == "/"..varWakeWord.." reset" then
+		varWeightingArray = {}
+		MP.SendChatMessage(-1,sender_name.." reset the weighted random system.")
+
+		varAutoStartDelay = 90 -- what the delay between autostartted rounds should be
+		varAutoStartEnabled = false -- if the game automatically starts every varAutoStartDelay sectonds
+		varInfectedNearbyDistance = 250 -- how close the infected player(s) have to be for the screen to start turning green; in meters
+		varInfectedTintIntensity = 0.5 -- max intensity of the green filter; 0.00 to 1.00
+		varInfectedPulsingColor = false -- if the infected player(s) car(s) should pulse between the car's original color and green
+		varInfectedTintedScreen = false -- if infected player(s) should have a green tint applied to their scrfeen
+		-- varMaxNumberOfStartingZombies = 1 -- set the max number of infected at the beginning of each round
+		varNotifyDuringMatch = true -- if the chat box should be used as a deterrent for car spawns or edits during a match (also see below)
+		varRoundLength = 10*60 -- lenght of the game, in seconds (minutes*seconds, so default is 10 minutes)
+		varStartingSeconds = 10 -- the number of seconds before the initial player is revealed as infected
+		MP.SendChatMessage(-1,sender_name.." reset all configurable in-game settings.")
+
+		return 1
+	
+	elseif message == "/support" then -- show the support text
+		MP.SendChatMessage(sender_id,varSupportMessage)
 		return 1
 		
-	elseif string.find(message,"/"..varWakeWord.." credits") then
-		MP.SendChatMessage(sender_id,"Original code by: Olrosse, Stefan750, and Saile; https://github.com/Olrosse/BeamMP-Outbreak/tree/v0.2.0")
-		MP.SendChatMessage(sender_id,"Code improvements, cleanup, feature enabling and refinement by wreckedcarzz (https://wreckedcarzz.com) for the Talons of War (https://TalonsOfWar.com) BeamMP servers.")
+	elseif message == "/"..varWakeWord.." credits" then
+		MP.SendChatMessage(sender_id,"BeamMP Infected (ToW), version "..varDateEdited..".")
+		MP.SendChatMessage(sender_id,"Original code by: Olrosse, Stefan750, and Saile; https://github.com/Olrosse/BeamMP-Outbreak")
+		MP.SendChatMessage(sender_id,"Code improvements, clarity, cleanup, and additional features by wreckedcarzz (https://wreckedcarzz.com) for the Talons of War clan (https://TalonsOfWar.com) BeamMP servers.")
 		
 		return 1
 		
@@ -670,8 +774,10 @@ function outbreakChatMessageHandler(sender_id, sender_name, message)
 		MP.SendChatMessage(sender_id,"/"..varWakeWord.." start")
 		MP.SendChatMessage(sender_id,"/"..varWakeWord.." stop")
 		MP.SendChatMessage(sender_id,"/"..varWakeWord.." autostart")
+		MP.SendChatMessage(sender_id,"/"..varWakeWord.." autostart delay [seconds]")
 		MP.SendChatMessage(sender_id,"/"..varWakeWord.." length [minutes]")
-		MP.SendChatMessage(sender_id,"/"..varWakeWord.." reset (resets the infection randomizer)")
+		MP.SendChatMessage(sender_id,"/"..varWakeWord.." quiet [minutes] (how many minutes to quiet the reminder about how to play)")
+		MP.SendChatMessage(sender_id,"/"..varWakeWord.." reset (resets the infection randomizer, and any adjusted settings)")
 		MP.SendChatMessage(sender_id,"/"..varWakeWord.." credits")
 		MP.SendChatMessage(sender_id,"/"..varWakeWord.." advancedSettings")
 	elseif message == "/"..varWakeWord.." advancedSettings" then
@@ -679,19 +785,18 @@ function outbreakChatMessageHandler(sender_id, sender_name, message)
 		MP.SendChatMessage(sender_id,"/"..varWakeWord.." infectedNearbyDistance [meters] (default: "..varInfectedNearbyDistance.."; at what distance does the screen begin to tint for non-infected players near an infected player)")
 		if varInfectedPulsingColor then
 			MP.SendChatMessage(sender_id,"/"..varWakeWord.." infectedPulsingColor (default: true; do infected cars 'pulse' green? NOTE: infectedTintedScreen MUST be set to true/on, otherwise infectedPulsingColor will cause a game crash! It is FALSE/OFF by default!")
-		else--if
+		elseif not varInfectedPulsingColor then
 			MP.SendChatMessage(sender_id,"/"..varWakeWord.." infectedPulsingColor (default: false; do infected cars 'pulse' green? NOTE: infectedTintedScreen MUST be set to true/on, otherwise infectedPulsingColor will cause a game crash! It is FALSE/OFF by default!")
 		end
 		if varInfectedTintedScreen then
 			MP.SendChatMessage(sender_id,"/"..varWakeWord.." infectedTintedScreen (default: true; if infected players have a green tint applied to their screen)")
-		else
+		elseif not varInfectedTintedScreen then
 			MP.SendChatMessage(sender_id,"/"..varWakeWord.." infectedTintedScreen (default: false; if infected players have a green tint applied to their screen)")
 		end
 		MP.SendChatMessage(sender_id,"/"..varWakeWord.." infectedTintIntensity [0.00 to 1.00] (default: "..varInfectedTintIntensity.."; sets the intensity of the green tint)")
-		MP.SendChatMessage(sender_id,"Settings do NOT save, but are reset every server restart.")
+		--MP.SendChatMessage(sender_id,"/"..varWakeWord.." maxStartingZombies [maximum]")
+		MP.SendChatMessage(sender_id,"Settings do NOT save, but are reset every server restart. To have settings kept, edit the setting in /resources/server/outbreak/main.lua")
 	
-	-- disabled, original code	
-	--	varExcludedPlayers[]
 		return 1
     else
         return 0
@@ -700,6 +805,9 @@ end
 
 function onPlayerDisconnect(playerID)
 	local varPlayerName = MP.GetPlayerName(playerID)
+	if gameState.gameRunning then
+		MP.SendChatMessage(-1, varPlayerName.." quit during a match.")
+	end
 	if gameState.gameRunning and gameState.players and gameState.players[varPlayerName] then
 		gameState.players[varPlayerName] = "remove"
 	end
@@ -707,6 +815,9 @@ end
 
 function onVehicleDeleted(playerID,vehicleID)
 	local varPlayerName = MP.GetPlayerName(playerID)
+	if gameState.gameRunning then
+		MP.SendChatMessage(-1, varPlayerName.." deleted a vehicle.")
+	end
 	if gameState.gameRunning and gameState.players and gameState.players[varPlayerName] then
 		if not MP.GetPlayerVehicles(playerID) then
 			gameState.players[varPlayerName] = "remove"
@@ -717,9 +828,7 @@ end
 MP.TriggerClientEventJson(-1, "recieveGameState", gameState)
 MP.TriggerClientEvent(-1, "resetInfected", "data")
 
--- I don't know why this is here
 MP.RegisterEvent("onChatMessage", "outbreakChatMessageHandler")
 MP.RegisterEvent("onPlayerDisconnect", "onPlayerDisconnect")
 MP.RegisterEvent("onVehicleDeleted", "onVehicleDeleted")
 MP.RegisterEvent("onPlayerJoin", "requestGameState")
-
