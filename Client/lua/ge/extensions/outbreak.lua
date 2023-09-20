@@ -1,4 +1,4 @@
---lightly adjustments to work with the server-side changes, by wreckedcarzz (https://wreckedcarzz.com)
+--light adjustments to work with the server-side changes, by wreckedcarzz (https://wreckedcarzz.com)
 
 
 
@@ -434,7 +434,7 @@ if MPGameNetwork then AddEventHandler("resetInfected", resetInfected) end
 if MPGameNetwork then AddEventHandler("recieveGameState", recieveGameState) end
 if MPGameNetwork then AddEventHandler("updateGameState", updateGameState) end
 
-requestGameState()
+--requestGameState()
 
 M.requestGameState = requestGameState
 M.sendContact = sendContact
