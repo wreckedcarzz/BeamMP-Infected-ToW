@@ -96,7 +96,7 @@ local varFloor = math.floor
 local varLastState = gameState
 local varIncludedPlayers = {} --TODO make these do something
 local varMod = math.fmod
-local varNoticeSwitch = true
+local varNoticeSwitch = 0 -- 0, 1, 2 are possible variables
 local varNotifyCreditsAfter = 5
 local varNotifyCreditsAfterCount = 0
 --local varNotifyDisable = false
@@ -614,12 +614,18 @@ local function gameRunningLoop() --code in this loop runs every 1s during an act
 		end
 				
 		if varNotifyDuringMatch == true and math.fmod(gameState.time, varNotifyEveryTime) == 0 then
-			if varNoticeSwitch == true then
+			if varNoticeSwitch == 0 then
 				MP.SendChatMessage(-1,varNotifySpawnEditText)
-				varNoticeSwitch = false
-			else
+				varNoticeSwitch = 1
+			elseif varNoticeSwitch == 1 then
 				MP.SendChatMessage(-1,varNotifyRepairRespawn)
-				varNoticeSwitch = true
+				varNoticeSwitch = 2
+			elseif varNoticeSwitch == 2 then
+				MP.SendChatMessage(-1,varStopMsg)
+				varNoticeSwitch = 0
+			else
+				varNoticeSwitch = 0
+				-- this should never happen but as a catch if it does
 			end
 		end
 		
@@ -680,7 +686,7 @@ function timer() -- I think this runs every 1s
 		if varAutoStartTimer < varAutoStartDelay and string.find(varAutoStartTimer, 0) then
 			MP.SendChatMessage(-1,"Automatic zombie gamemode enabled; "..varAutoStartDelay - varAutoStartTimer.." seconds remaining!") -- removed text: before the match begins.")
 			MP.SendChatMessage(-1,"Chat with other players: "..varDiscordURL)
-			MP.SendChatMessage(-1,varStopMsg)
+			MP.SendChatMessage(-1,varStopAutoMsg)
 		elseif varAutoStartTimer + 5 >= varAutoStartDelay then
 			varAutoStartTimer = -1
 			gameSetup()
