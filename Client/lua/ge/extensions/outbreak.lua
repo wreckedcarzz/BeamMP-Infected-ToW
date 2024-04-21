@@ -1,4 +1,25 @@
---light adjustments to work with the server-side changes, by wreckedcarzz (https://wreckedcarzz.com)
+-- improvements and adjustments to work alongside the server-side changes, by wreckedcarzz (https://wreckedcarzz.com)
+
+
+
+--- settings ---
+local varWakeWord = "infected" -- customizable word for text commands ( /varWakeWord <action> ) 
+
+local varNotifyRepairRespawn = "Repairing: ALL players must come to a COMPLETE STOP before repairing (Insert); non-infected must NOT be near a zombie (have a green-tinted screen) to repair" -- explaining rules regarding repairing
+local varNotifySpawnEditText = "Spawning/editing: Do NOT spawn or edit vehicles during the match" -- text used to deter players from making any new 'events' that will desync players and break the game, causing affected players to rejoin the server
+
+local varNotifyStop = 'You can stop a live match by typing "/'..varWakeWord..' stop"' -- message shown at the end of 
+local varNotifyStopAuto = 'You can disable autostart (and stop a live match) by typing "/'..varWakeWord..' stop"' -- autostart variant of above
+local varNotifyQuickStart = 'You can start a [BETA] zombie match quickly by typing "/'..varWakeWord..' autostart", or see the settings by typing "/'..varWakeWord..' help".'
+
+local varServerOwner = "CHANGE_ME"
+local varServerAdmin1 = ""
+local varServerAdmin2 = ""
+local varServerAdmin3 = ""
+local varServerMod1 = ""
+local varServerMod2 = ""
+local varServerMod3 = ""
+--- end settings ---
 
 
 
@@ -6,16 +27,19 @@
 DONE reverted, redid changes to original
 DONE added nametag colors for teams
 TEST cleanup of variables, renaming
+TEST nametags for admins
 ]]
 
 
 
+--- non-setting variables ---
 local M = {}
 --local floor = math.floor
 --local mod = math.fmod
 local varDefaultGreenFadeDistance = 20
 local varDistanceColor = -1
 local varGameState = {players = {}, settings = {}}
+--- end variables ---
 
 
 
@@ -31,7 +55,8 @@ local blockedActions = core_input_actionFilter.createActionTemplate({"vehicleTel
 local function secondsToDaysHoursMinutesSeconds(total_seconds) --modified code from https://stackoverflow.com/questions/45364628/lua-4-script-to-convert-seconds-elapsed-to-days-hours-minutes-seconds
     local time_minutes  = math.floor(math.fmod(total_seconds, 3600) / 60)
     local time_seconds  = math.floor(math.fmod(total_seconds, 60))
-    --[[if (time_minutes < 10) then
+    --[[
+	if (time_minutes < 10) then
         time_minutes = "0" .. time_minutes
     end
 	]]
@@ -70,10 +95,12 @@ local function resetInfected(data)
 	scenetree["PostEffectCombinePassObject"]:setField("enableBlueShift", 0,0)
 	scenetree["PostEffectCombinePassObject"]:setField("blueShiftColor", 0,"0 0 0")
 
-	--core_input_actionFilter.addAction(0, 'vehicleTeleporting', false)
-	--core_input_actionFilter.addAction(0, 'vehicleMenues', false)
-	--core_input_actionFilter.addAction(0, 'freeCam', false)
-	--core_input_actionFilter.addAction(0, 'resetPhysics', false)
+	--[[
+	core_input_actionFilter.addAction(0, 'vehicleTeleporting', false)
+	core_input_actionFilter.addAction(0, 'vehicleMenues', false)
+	core_input_actionFilter.addAction(0, 'freeCam', false)
+	core_input_actionFilter.addAction(0, 'resetPhysics', false)
+	]]
 end
 
 local function recieveGameState(data)
@@ -114,12 +141,14 @@ local function updateGameState(data)
 
 	if varGameState.time then time = varGameState.time-1 end
 
-	local txt = ""
-
+	local txt1stLine = ""
+	local txt2ndLine = "RULES:"
+	
 	if varGameState.gameRunning and time and time == 0 then
 		MPVehicleGE.hideNicknames(true)
 
-		--[[if varGameState.settings and varGameState.settings.mode = "competitive" then
+		--[[
+		if varGameState.settings and varGameState.settings.mode = "competitive" then
 	    	core_input_actionFilter.setGroup('vehicleTeleporting', actionTemplate.vehicleTeleporting)
 			core_input_actionFilter.addAction(0, 'vehicleTeleporting', true)
 
@@ -129,24 +158,31 @@ local function updateGameState(data)
 	    	core_input_actionFilter.setGroup('freeCam', actionTemplate.freeCam)
 			core_input_actionFilter.addAction(0, 'freeCam', true)
 
-	    --	core_input_actionFilter.setGroup('resetPhysics', actionTemplate.resetPhysics)
-		--	core_input_actionFilter.addAction(0, 'resetPhysics', true)
-		--end
+	    	core_input_actionFilter.setGroup('resetPhysics', actionTemplate.resetPhysics)
+			core_input_actionFilter.addAction(0, 'resetPhysics', true)
+		end
 		]]
 	end
 
 	if time and time < 0 then
-		txt = "Game starts in "..math.abs(time).." seconds..."
+		txt1stLine = "Game starts in "..math.abs(time).." seconds..."
 	elseif varGameState.gameRunning and not varGameState.gameEnding and time or varGameState.endtime and (varGameState.endtime - time) > 9 then
 		local timeLeft = secondsToDaysHoursMinutesSeconds(varGameState.varRoundLength - time)
-		txt = "Infected: "..varGameState.InfectedPlayers.."/"..varGameState.playerCount..", Time Left "..timeLeft..""
+		txt1stLine = "Infected: "..varGameState.InfectedPlayers.."/"..varGameState.playerCount..", Time Left "..timeLeft..""
 	elseif time and varGameState.endtime and (varGameState.endtime - time) < 7 then
 		local timeLeft = varGameState.endtime - time
-		txt = "Infected: "..varGameState.InfectedPlayers.."/"..varGameState.playerCount..", Colors reset in "..math.abs(timeLeft-1).." seconds"
+		txt1stLine = "Infected: "..varGameState.InfectedPlayers.."/"..varGameState.playerCount.."; colors reset in "..math.abs(timeLeft-1).." seconds"
 	end
 	
-	if txt ~= "" then
-		guihooks.message({txt = txt}, 1, "outbreak.time")
+	if txt1stLine ~= "" then
+		guihooks.message(txt1stLine, 1, "outbreak.time", poi_checkmark_rect)
+		guihooks.message(txt2ndLine, 1, "outbreak.rules", poi_exclamationmark_rect)
+		guihooks.message(varNotifyRepairRespawn, 1, "outbreak.rule1", poi_garage_3_rect)
+		guihooks.message(varNotifySpawnEditText, 1, "outbreak.rule2", poi_dealer_1_rect)
+	--[[else --if txt1stLine == "" then
+		guihooks.message(varNotifyQuickStart, 1, "outbreak.teach1", poi_checkmark_rect)
+		guihooks.message(varNotifyStopAuto, 1, "outbreak.teach2", poi_checkmark_rect)
+	]]
 	end
 	
 	if varGameState.gameEnded then
@@ -200,41 +236,7 @@ local function onVehicleSwitched(oldID,ID)
 	end
 end
 
---[[local function nametags(curentOwnerName,player,vehicle)
-	if varGameState.players[curentOwnerName] and varGameState.players[curentOwnerName].infected and not player.infected and curentOwnerName ~= vehicle.ownerName then
-		local veh = be:getObjectByID(vehicle.gameVehicleID)
-		if veh then
-			local vehPos = veh:getPosition()
-			local posOffset = vec3(0,0,2)
-			debugDrawer:drawTextAdvanced(vehPos+posOffset, String(" Survivor "), ColorF(1,1,1,1), true, false, ColorI(200,50,50,255))
-		end
-	end
-end]]
-
 local function nametags(curentOwnerName,player,vehicle)
-	-- show blue Server Owner / Admin / Mod tag to all players when not in match
-	--[[if MPVehicleGE and not varGameState.gameRunning then
-		if varGameState.players[curentOwnerName] = "wreckedcarzz" or varGameState.players[curentOwnerName] = "FredTheFeline" or varGameState.players[curentOwnerName] = "NateGT90" then
-			local tempBlueTagText = ""
-			
-			if varGameState.players[curentOwnerName] = "wreckedcarzz" then
-				tempBlueTagText = " Server Owner "
-			elseif varGameState.players[curentOwnerName] = "FredTheFeline" then
-				tempBlueTagText = " Server Admin "
-			elseif varGameState.players[curentOwnerName] = "NateGT90" then
-				tempBlueTagText = " Server Admin "
-			end
-			
-			local varVeh = be:getObjectByID(vehicle.gameVehicleID)
-			
-			if varVeh then
-				local varVehPos = varVeh:getPosition()
-				local varPositionOffset = vec3(0,0,2)
-				debugDrawer:drawTextAdvanced(varVehPos+varPositionOffset, String(tempBlueTagText), ColorF(1,1,1,1), true, false, ColorI(72,0,255,255))
-			end
-		end
-	end]]
-
 	-- show red Survivor tag to Zombies players in Infected mode
 	if varGameState.players[curentOwnerName] and varGameState.players[curentOwnerName].infected and not player.infected and curentOwnerName ~= vehicle.ownerName then
 		local varVeh = be:getObjectByID(vehicle.gameVehicleID)
@@ -276,6 +278,39 @@ local function nametags(curentOwnerName,player,vehicle)
 		end
 	end
 	]]
+end
+
+local function nametagsAdmins(curentOwnerName,player,vehicle)
+	-- show blue Server Owner / Admin / Mod tag to all players when not in match	
+	if not varGameState.gameRunning then
+		if curentOwnerName == varServerOwner or curentOwnerName == varServerAdmin1 or curentOwnerName == varServerAdmin2 or curentOwnerName == varServerAdmin3 or curentOwnerName == varServerMod1 or curentOwnerName == varServerMod2 or curentOwnerName == varServerMod3 then
+			local tempBlueTagText = ""
+			
+			if curentOwnerName == varServerOwner then
+				tempBlueTagText = " Server Owner "
+			elseif curentOwnerName == varServerAdmin1 then
+				tempBlueTagText = " Server Admin "
+			elseif curentOwnerName == varServerAdmin2 then
+				tempBlueTagText = " Server Admin "
+			elseif curentOwnerName == varServerAdmin3 then
+				tempBlueTagText = " Server Admin "
+			elseif curentOwnerName == varServerMod1 then
+				tempBlueTagText = " Server Mod "
+			elseif curentOwnerName == varServerMod2 then
+				tempBlueTagText = " Server Mod "
+			elseif curentOwnerName == varServerMod3 then
+				tempBlueTagText = " Server Mod "
+			end
+			
+			local varVeh = be:getObjectByID(vehicle.gameVehicleID)
+			
+			if varVeh then
+				local varVehPos = varVeh:getPosition()
+				local varPositionOffset = vec3(0,0,2)
+				debugDrawer:drawTextAdvanced(varVehPos+varPositionOffset, String(tempBlueTagText), ColorF(1,1,1,1), true, false, ColorI(72,0,255,255))
+			end
+		end
+	end
 end
 
 local function color(player,vehicle,dt)
@@ -346,6 +381,99 @@ local function color(player,vehicle,dt)
 	end
 end
 
+--[[ new broken version
+local function onPreRender(dt)
+	if MPCoreNetwork and not MPCoreNetwork.isMPSession() then -- if the player isn't online
+		return
+	end
+	
+	if not varGameState.gameRunning then -- if the zombie mode isn't active
+		local currentVehID = be:getPlayerVehicleID(0)
+		local curentOwnerName = MPConfig.getNickname()
+
+		
+		--if currentVehID and MPVehicleGE.getVehicleByGameID(currentVehID) then
+		--	curentOwnerName = MPVehicleGE.getVehicleByGameID(currentVehID).ownerName
+		--end
+		
+
+		for k,vehicle in pairs(MPVehicleGE.getVehicles()) do
+			--if varGameState.players then
+				local player = varGameState.players[vehicle.ownerName]
+				--if player then
+					--if not varGameState.gameRunning then
+						nametagsAdmins(curentOwnerName,player,vehicle) -- run the nametagsAdmins function
+					--end
+				--end
+			--end
+		end
+	return -- halt processing the rest of this function
+	end
+	
+	local currentVehID = be:getPlayerVehicleID(0)
+	local curentOwnerName = MPConfig.getNickname()
+
+	if currentVehID and MPVehicleGE.getVehicleByGameID(currentVehID) then
+		curentOwnerName = MPVehicleGE.getVehicleByGameID(currentVehID).ownerName
+	end
+
+	local closestInfected = 100000000
+	
+	for k,vehicle in pairs(MPVehicleGE.getVehicles()) do
+		if varGameState.players then
+			local player = varGameState.players[vehicle.ownerName]
+			if player then
+				nametags(curentOwnerName,player,vehicle)
+				color(player,vehicle,dt)
+			end
+		
+			if varGameState.players[curentOwnerName] and currentVehID and not varGameState.players[curentOwnerName].infected and varGameState.players[vehicle.ownerName].infected and currentVehID ~= vehicle.gameVehicleID then
+				local myVeh = be:getObjectByID(currentVehID)
+				local veh = be:getObjectByID(vehicle.gameVehicleID)
+				if veh and myVeh then
+					if varGameState.players[vehicle.ownerName].infected then
+						local distance = distance(myVeh:getPosition(),veh:getPosition())
+						if distance < closestInfected then
+							closestInfected = distance
+						end
+					end
+				end
+			end
+		end
+	end
+
+	local tempSetting = varDefaultGreenFadeDistance
+	
+	if varGameState.settings then
+		tempSetting = varGameState.settings.GreenFadeDistance
+	end
+	
+	varDistanceColor = math.min(0.4,1 - (closestInfected/(tempSetting or varDefaultGreenFadeDistance)))
+	]]
+	
+	--[[ this stays commented out
+	if varDistanceColor > 0 then
+		core_input_actionFilter.setGroup('vehicleTeleporting', actionTemplate.vehicleTeleporting)
+		core_input_actionFilter.addAction(0, 'vehicleTeleporting', true)
+
+		core_input_actionFilter.setGroup('resetPhysics', actionTemplate.resetPhysics)
+		core_input_actionFilter.addAction(0, 'resetPhysics', true)
+	else
+		core_input_actionFilter.addAction(0, 'vehicleTeleporting', false)
+		core_input_actionFilter.addAction(0, 'resetPhysics', false)
+	end
+	]]
+	
+	--[[
+	if varGameState.settings and varGameState.settings.infectorTint and varGameState.players[curentOwnerName] and varGameState.players[curentOwnerName].infected then
+		varDistanceColor = varGameState.settings.varDistanceColor or 0.5
+	end
+
+	scenetree["PostEffectCombinePassObject"]:setField("enableBlueShift", 0,varDistanceColor)
+	scenetree["PostEffectCombinePassObject"]:setField("blueShiftColor", 0,"0 1 0")
+end
+]]
+
 local function onPreRender(dt)
 	if MPCoreNetwork and not MPCoreNetwork.isMPSession() then
 		return
@@ -353,9 +481,11 @@ local function onPreRender(dt)
 	
 	if not varGameState.gameRunning then
 		return
-	--[[elseif MPVehicleGE and varGameState.players[curentOwnerName] = "wreckedcarzz" or varGameState.players[curentOwnerName] = "FredTheFeline" or varGameState.players[curentOwnerName] = "NateGT90" then
+	--[[
+	elseif MPVehicleGE and varGameState.players[curentOwnerName] = "wreckedcarzz" or varGameState.players[curentOwnerName] = "FredTheFeline" or varGameState.players[curentOwnerName] = "NateGT90" then
 		nametags()
-		return]]
+		return
+	]]
 	end
 
 	local currentVehID = be:getPlayerVehicleID(0)
@@ -420,7 +550,7 @@ end
 local function onResetGameplay(id)
 	--[[dump(varDistanceColor , be:getPlayerVehicleID(0) , id )
 	if varDistanceColor > 0 and id == 0 then
-		guihooks.message({txt = "Infector to close, cannot Reset"}, 1, "outbreak.reset")
+		guihooks.message({txt1stLine = "Infector to close, cannot Reset"}, 1, "outbreak.reset")
 	end
 	]]
 end
@@ -429,10 +559,57 @@ local function onExtensionUnloaded()
 	resetInfected()
 end
 
+local function playAudio(varSoundMessage)
+	if varSoundMessage == "playerInfected" then -- section for human voice
+		Engine.Audio.playOnce('AudioGui', '/sounds/announcer/midnight/infected.ogg')
+	elseif varSoundMessage == "replacementInfected" then
+		Engine.Audio.playOnce('AudioGui', '/sounds/announcer/midnight/replacementInfected.ogg')
+	elseif varSoundMessage == "gameOverWithSurvivors" then
+		Engine.Audio.playOnce('AudioGui', '/sounds/announcer/midnight/gameOver.ogg')
+	elseif varSoundMessage == "gameOverNoSurvivors" then
+		Engine.Audio.playOnce('AudioGui', '/sounds/announcer/midnight/gameOverNoSurvivors.ogg')
+	elseif varSoundMessage == "gameHalted" then
+		Engine.Audio.playOnce('AudioGui', '/sounds/announcer/midnight/gameStopped.ogg')
+	elseif varSoundMessage == "gameHaltedUnknownError" then
+		--Engine.Audio.playOnce('AudioGui', '/sounds/announcer/midnight/'..varSoundMessage..'.ogg')
+	elseif varSoundMessage == "infectedGameStart" then
+		Engine.Audio.playOnce('AudioGui', '/sounds/announcer/midnight/matchStarting.ogg')
+	elseif varSoundMessage == "remaining5minutes" then
+		Engine.Audio.playOnce('AudioGui', '/sounds/announcer/midnight/fiveMinutesRemaining.ogg')
+	elseif varSoundMessage == "remaining1minute" then
+		Engine.Audio.playOnce('AudioGui', '/sounds/announcer/midnight/oneMinuteRemaining.ogg')
+	elseif varSoundMessage == "remaining30seconds" then
+		Engine.Audio.playOnce('AudioGui', '/sounds/announcer/midnight/thirtySecondsRemaining.ogg')
+	elseif varSoundMessage == "robotPlayerInfected" then -- section for robot voice
+		Engine.Audio.playOnce('AudioGui', '/sounds/announcer/robot/infected.ogg')
+	elseif varSoundMessage == "robotReplacementInfected" then
+		Engine.Audio.playOnce('AudioGui', '/sounds/announcer/robot/replacementInfected.ogg')
+	elseif varSoundMessage == "robotGameOverWithSurvivors" then
+		Engine.Audio.playOnce('AudioGui', '/sounds/announcer/robot/gameOver.ogg')
+	elseif varSoundMessage == "robotGameOverNoSurvivors" then
+		Engine.Audio.playOnce('AudioGui', '/sounds/announcer/robot/gameOverNoSurvivors.ogg')
+	elseif varSoundMessage == "robotGameHalted" then
+		Engine.Audio.playOnce('AudioGui', '/sounds/announcer/robot/gameStopped.ogg')
+	elseif varSoundMessage == "robotGameHaltedUnknownError" then
+		Engine.Audio.playOnce('AudioGui', '/sounds/announcer/robot/gameStoppedUnknownReason.ogg')
+	elseif varSoundMessage == "robotInfectedGameStart" then
+		Engine.Audio.playOnce('AudioGui', '/sounds/announcer/robot/matchStarting.ogg')
+	elseif varSoundMessage == "robotRemaining5minutes" then
+		Engine.Audio.playOnce('AudioGui', '/sounds/announcer/robot/fiveMinutesRemaining.ogg')
+	elseif varSoundMessage == "robotRemaining1minute" then
+		Engine.Audio.playOnce('AudioGui', '/sounds/announcer/robot/oneMinuteRemaining.ogg')
+	elseif varSoundMessage == "robotRemaining30seconds" then
+		Engine.Audio.playOnce('AudioGui', '/sounds/announcer/robot/thirtySecondsRemaining.ogg')
+	else
+		-- ??? this should never happen
+	end
+end
+
 if MPGameNetwork then AddEventHandler("recieveInfected", recieveInfected) end
 if MPGameNetwork then AddEventHandler("resetInfected", resetInfected) end
 if MPGameNetwork then AddEventHandler("recieveGameState", recieveGameState) end
 if MPGameNetwork then AddEventHandler("updateGameState", updateGameState) end
+if MPGameNetwork then AddEventHandler("playAudio", playAudio) end
 
 --requestGameState()
 
